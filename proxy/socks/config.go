@@ -1,6 +1,8 @@
+// +build !confonly
+
 package socks
 
-import "github.com/v2fly/v2ray-core/v5/common/protocol"
+import "v2ray.com/core/common/protocol"
 
 func (a *Account) Equals(another protocol.Account) bool {
 	if account, ok := another.(*Account); ok {

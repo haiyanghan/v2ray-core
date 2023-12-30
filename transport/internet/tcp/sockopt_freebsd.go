@@ -1,11 +1,11 @@
-//go:build freebsd
 // +build freebsd
+// +build !confonly
 
 package tcp
 
 import (
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/transport/internet"
 )
 
 // GetOriginalDestination from tcp conn

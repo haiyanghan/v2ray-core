@@ -7,17 +7,13 @@ package proxy
 
 import (
 	"context"
-	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	"github.com/v2fly/v2ray-core/v5/transport"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/features/routing"
+	"v2ray.com/core/transport"
+	"v2ray.com/core/transport/internet"
 )
-
-// A timeout for reading the first payload from the client, used in 0-RTT optimizations.
-const FirstPayloadTimeout = 100 * time.Millisecond
 
 // An Inbound processes inbound connections.
 type Inbound interface {

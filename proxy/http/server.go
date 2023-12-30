@@ -1,3 +1,5 @@
+// +build !confonly
+
 package http
 
 import (
@@ -9,20 +11,20 @@ import (
 	"strings"
 	"time"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	"github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	http_proto "github.com/v2fly/v2ray-core/v5/common/protocol/http"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/common/signal"
-	"github.com/v2fly/v2ray-core/v5/common/task"
-	"github.com/v2fly/v2ray-core/v5/features/policy"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
+	"v2ray.com/core"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/errors"
+	"v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	http_proto "v2ray.com/core/common/protocol/http"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/common/signal"
+	"v2ray.com/core/common/task"
+	"v2ray.com/core/features/policy"
+	"v2ray.com/core/features/routing"
+	"v2ray.com/core/transport/internet"
 )
 
 // Server is an HTTP proxy server.
@@ -53,7 +55,7 @@ func (s *Server) policy() policy.Session {
 
 // Network implements proxy.Inbound.
 func (*Server) Network() []net.Network {
-	return []net.Network{net.Network_TCP, net.Network_UNIX}
+	return []net.Network{net.Network_TCP}
 }
 
 func isTimeout(err error) bool {
@@ -101,7 +103,7 @@ Start:
 	if err != nil {
 		trace := newError("failed to read http request").Base(err)
 		if errors.Cause(err) != io.EOF && !isTimeout(errors.Cause(err)) {
-			trace.AtWarning()
+			trace.AtWarning() // nolint: errcheck
 		}
 		return trace
 	}
@@ -109,7 +111,7 @@ Start:
 	if len(s.config.Accounts) > 0 {
 		user, pass, ok := parseBasicAuth(request.Header.Get("Proxy-Authorization"))
 		if !ok || !s.config.HasAccount(user, pass) {
-			return common.Error2(conn.Write([]byte("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"proxy\"\r\n\r\n")))
+			return common.Error2(conn.Write([]byte("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"proxy\"\r\nConnection: close\r\n\r\n")))
 		}
 		if inbound != nil {
 			inbound.User.Email = user
@@ -157,7 +159,7 @@ Start:
 	return err
 }
 
-func (s *Server) handleConnect(ctx context.Context, _ *http.Request, reader *bufio.Reader, conn internet.Connection, dest net.Destination, dispatcher routing.Dispatcher) error {
+func (s *Server) handleConnect(ctx context.Context, request *http.Request, reader *bufio.Reader, conn internet.Connection, dest net.Destination, dispatcher routing.Dispatcher) error {
 	_, err := conn.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
 	if err != nil {
 		return newError("failed to write back OK response").Base(err)
@@ -201,7 +203,7 @@ func (s *Server) handleConnect(ctx context.Context, _ *http.Request, reader *buf
 		return nil
 	}
 
-	closeWriter := task.OnSuccess(requestDone, task.Close(link.Writer))
+	var closeWriter = task.OnSuccess(requestDone, task.Close(link.Writer))
 	if err := task.Run(ctx, closeWriter, responseDone); err != nil {
 		common.Interrupt(link.Reader)
 		common.Interrupt(link.Writer)
@@ -242,7 +244,9 @@ func (s *Server) handlePlainHTTP(ctx context.Context, request *http.Request, wri
 		request.Header.Set("User-Agent", "")
 	}
 
-	content := &session.Content{}
+	content := &session.Content{
+		Protocol: "http/1.1",
+	}
 
 	content.SetAttribute(":method", strings.ToUpper(request.Method))
 	content.SetAttribute(":path", request.URL.Path)
@@ -258,8 +262,8 @@ func (s *Server) handlePlainHTTP(ctx context.Context, request *http.Request, wri
 		return err
 	}
 
-	// Plain HTTP request is not a stream. The request always finishes before response. Hence, request has to be closed later.
-	defer common.Close(link.Writer)
+	// Plain HTTP request is not a stream. The request always finishes before response. Hense request has to be closed later.
+	defer common.Close(link.Writer) // nolint: errcheck
 	var result error = errWaitAnother
 
 	requestDone := func() error {
@@ -287,7 +291,6 @@ func (s *Server) handlePlainHTTP(ctx context.Context, request *http.Request, wri
 				response.Close = true
 				result = nil
 			}
-			defer response.Body.Close()
 		} else {
 			newError("failed to read response from ", request.Host).Base(err).AtWarning().WriteToLog(session.ExportIDToError(ctx))
 			response = &http.Response{

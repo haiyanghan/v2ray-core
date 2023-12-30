@@ -1,31 +1,28 @@
+// +build !confonly
+
 package websocket
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
-	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pires/go-proxyproto"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	http_proto "github.com/v2fly/v2ray-core/v5/common/protocol/http"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	v2tls "github.com/v2fly/v2ray-core/v5/transport/internet/tls"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
+	http_proto "v2ray.com/core/common/protocol/http"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/transport/internet"
+	v2tls "v2ray.com/core/transport/internet/tls"
 )
 
 type requestHandler struct {
-	path                string
-	ln                  *Listener
-	earlyDataEnabled    bool
-	earlyDataHeaderName string
+	path string
+	ln   *Listener
 }
 
 var upgrader = &websocket.Upgrader{
@@ -38,35 +35,11 @@ var upgrader = &websocket.Upgrader{
 }
 
 func (h *requestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	responseHeader := http.Header{}
-
-	var earlyData io.Reader
-	if !h.earlyDataEnabled { // nolint: gocritic
-		if request.URL.Path != h.path {
-			writer.WriteHeader(http.StatusNotFound)
-			return
-		}
-	} else if h.earlyDataHeaderName != "" {
-		if request.URL.Path != h.path {
-			writer.WriteHeader(http.StatusNotFound)
-			return
-		}
-		earlyDataStr := request.Header.Get(h.earlyDataHeaderName)
-		earlyData = base64.NewDecoder(base64.RawURLEncoding, bytes.NewReader([]byte(earlyDataStr)))
-		if strings.EqualFold("Sec-WebSocket-Protocol", h.earlyDataHeaderName) {
-			responseHeader.Set(h.earlyDataHeaderName, earlyDataStr)
-		}
-	} else {
-		if strings.HasPrefix(request.URL.RequestURI(), h.path) {
-			earlyDataStr := request.URL.RequestURI()[len(h.path):]
-			earlyData = base64.NewDecoder(base64.RawURLEncoding, bytes.NewReader([]byte(earlyDataStr)))
-		} else {
-			writer.WriteHeader(http.StatusNotFound)
-			return
-		}
+	if request.URL.Path != h.path {
+		writer.WriteHeader(http.StatusNotFound)
+		return
 	}
-
-	conn, err := upgrader.Upgrade(writer, request, responseHeader)
+	conn, err := upgrader.Upgrade(writer, request, nil)
 	if err != nil {
 		newError("failed to convert to WebSocket connection").Base(err).WriteToLog()
 		return
@@ -75,16 +48,10 @@ func (h *requestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 	forwardedAddrs := http_proto.ParseXForwardedFor(request.Header)
 	remoteAddr := conn.RemoteAddr()
 	if len(forwardedAddrs) > 0 && forwardedAddrs[0].Family().IsIP() {
-		remoteAddr = &net.TCPAddr{
-			IP:   forwardedAddrs[0].IP(),
-			Port: int(0),
-		}
+		remoteAddr.(*net.TCPAddr).IP = forwardedAddrs[0].IP()
 	}
-	if earlyData == nil {
-		h.ln.addConn(newConnection(conn, remoteAddr))
-	} else {
-		h.ln.addConn(newConnectionWithEarlyData(conn, remoteAddr, earlyData))
-	}
+
+	h.ln.addConn(newConnection(conn, remoteAddr))
 }
 
 type Listener struct {
@@ -96,40 +63,20 @@ type Listener struct {
 }
 
 func ListenWS(ctx context.Context, address net.Address, port net.Port, streamSettings *internet.MemoryStreamConfig, addConn internet.ConnHandler) (internet.Listener, error) {
-	l := &Listener{
-		addConn: addConn,
+	listener, err := internet.ListenSystem(ctx, &net.TCPAddr{
+		IP:   address.IP(),
+		Port: int(port),
+	}, streamSettings.SocketSettings)
+	if err != nil {
+		return nil, newError("failed to listen TCP(for WS) on", address, ":", port).Base(err)
 	}
-	wsSettings := streamSettings.ProtocolSettings.(*Config)
-	l.config = wsSettings
-	if l.config != nil {
-		if streamSettings.SocketSettings == nil {
-			streamSettings.SocketSettings = &internet.SocketConfig{}
-		}
-		streamSettings.SocketSettings.AcceptProxyProtocol = l.config.AcceptProxyProtocol
-	}
-	var listener net.Listener
-	var err error
-	if port == net.Port(0) { // unix
-		listener, err = internet.ListenSystem(ctx, &net.UnixAddr{
-			Name: address.Domain(),
-			Net:  "unix",
-		}, streamSettings.SocketSettings)
-		if err != nil {
-			return nil, newError("failed to listen unix domain socket(for WS) on ", address).Base(err)
-		}
-		newError("listening unix domain socket(for WS) on ", address).WriteToLog(session.ExportIDToError(ctx))
-	} else { // tcp
-		listener, err = internet.ListenSystem(ctx, &net.TCPAddr{
-			IP:   address.IP(),
-			Port: int(port),
-		}, streamSettings.SocketSettings)
-		if err != nil {
-			return nil, newError("failed to listen TCP(for WS) on ", address, ":", port).Base(err)
-		}
-		newError("listening TCP(for WS) on ", address, ":", port).WriteToLog(session.ExportIDToError(ctx))
-	}
+	newError("listening TCP(for WS) on ", address, ":", port).WriteToLog(session.ExportIDToError(ctx))
 
-	if streamSettings.SocketSettings != nil && streamSettings.SocketSettings.AcceptProxyProtocol {
+	wsSettings := streamSettings.ProtocolSettings.(*Config)
+
+	if wsSettings.AcceptProxyProtocol {
+		policyFunc := func(upstream net.Addr) (proxyproto.Policy, error) { return proxyproto.REQUIRE, nil }
+		listener = &proxyproto.Listener{Listener: listener, Policy: policyFunc}
 		newError("accepting PROXY protocol").AtWarning().WriteToLog(session.ExportIDToError(ctx))
 	}
 
@@ -139,23 +86,19 @@ func ListenWS(ctx context.Context, address net.Address, port net.Port, streamSet
 		}
 	}
 
-	l.listener = listener
-	useEarlyData := false
-	earlyDataHeaderName := ""
-	if wsSettings.MaxEarlyData != 0 {
-		useEarlyData = true
-		earlyDataHeaderName = wsSettings.EarlyDataHeaderName
+	l := &Listener{
+		config:   wsSettings,
+		addConn:  addConn,
+		listener: listener,
 	}
 
 	l.server = http.Server{
 		Handler: &requestHandler{
-			path:                wsSettings.GetNormalizedPath(),
-			ln:                  l,
-			earlyDataEnabled:    useEarlyData,
-			earlyDataHeaderName: earlyDataHeaderName,
+			path: wsSettings.GetNormalizedPath(),
+			ln:   l,
 		},
 		ReadHeaderTimeout: time.Second * 4,
-		MaxHeaderBytes:    http.DefaultMaxHeaderBytes,
+		MaxHeaderBytes:    2048,
 	}
 
 	go func() {

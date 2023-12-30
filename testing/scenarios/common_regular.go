@@ -1,4 +1,3 @@
-//go:build !coverage
 // +build !coverage
 
 package scenarios
@@ -23,7 +22,7 @@ func BuildV2Ray() error {
 
 func RunV2RayProtobuf(config []byte) *exec.Cmd {
 	genTestBinaryPath()
-	proc := exec.Command(testBinaryPath, "run", "-format=pb")
+	proc := exec.Command(testBinaryPath, "-config=stdin:", "-format=pb")
 	proc.Stdin = bytes.NewBuffer(config)
 	proc.Stderr = os.Stderr
 	proc.Stdout = os.Stdout

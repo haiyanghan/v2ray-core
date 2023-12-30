@@ -3,88 +3,59 @@ name: Bug report
 about: "Create a bug report to help us improve"
 ---
 
-<!--
 Please answer all the questions with enough information. All issues not following this template will be closed immediately.
-If you are not sure if your question is truely a bug of V2Ray, please discuss it at https://github.com/v2fly/v2ray-core/discussions first.
--->
+If you are not sure if your question is truely a bug in V2Ray, please discuss it [here](https://github.com/v2fly/discussion/issues) first.
 
-## What version of V2Ray are you using?
+1) What version of V2Ray are you using (If you deploy different version on server and client, please explicitly point out)?
 
-<!-- If you deploy different versions of V2Ray on server and client, please explicitly point out -->
+2) What's your scenario of using V2Ray? E.g., Watching YouTube videos in Chrome via Socks/VMess proxy.
 
+3) What did you see? (Please describe in detail, such as timeout, fake TLS certificate etc)
 
-## What's your scenario of using V2Ray?
+4) What's your expectation?
 
-<!-- E.g., watching YouTube videos in browsers via Socks/VMess proxy -->
+5) Please attach your configuration file (**Mask IP addresses before submit this issue**).
 
-
-## What problems have you encountered?
-
-<!-- Please describe in detail, such as timeout, fake TLS certificate, etc -->
-
-
-## What's your expectation?
-
-
-
-## Please attach your configuration here
-
-<!-- Remember to mask your IP address or hostname -->
-
-**Server configuration:**
+Server configuration:
 
 ```javascript
-// Please attach your server configuration here.
-
+    // Please attach your server configuration here.
 ```
 
-**Client configuration:**
+Client configuration:
 
 ```javascript
-// Please attach your client configuration here.
-
+    // Please attach your client configuration here.
 ```
 
-## Please attach error logs here
+6) Please attach error logs, especially the bottom lines if the file is large. Error log file is usually at `/var/log/v2ray/error.log` on Linux.
 
-<!--
-only trailing lines if the log file is large in size.
-Error log file is usually at `/var/log/v2ray/error.log` on Linux.
--->
-
-**Server error log:**
+Server error log:
 
 ```javascript
-// Please attach your server error log here.
-
+    // Please attach your server error log here.
 ```
 
-**Client error log:**
+Client error log:
 
 ```javascript
-// Please attach your client error log here.
-
+    // Please attach your client error log here.
 ```
 
-## Please attach access log here
-
-<!-- Access log is usually at '/var/log/v2ray/access.log' on Linux. -->
+7) Please attach access log. Access log is usually at '/var/log/v2ray/access.log' on Linux.
 
 ```javascript
-// Please attach your server access log here.
-
+    // Please attach your server access log here.
 ```
 
-## Other configurations (such as Nginx) and logs here
+8) Other configurations (such as Nginx) and logs.
 
+9) If V2Ray doesn't run, please attach output from `--test`.
 
+The command is usually `/usr/bin/v2ray/v2ray --test --config /etc/v2ray/config.json`, but may vary according to your scenario.
 
-## If V2Ray cannot start up, please attach output from `--test` command
+10) If V2Ray service doesn't run, please attach journal log.
 
+Usual command is `journalctl -u v2ray`.
 
-
-## If V2Ray service is abnormal, please attach journal log here
-
-<!-- Usual command is `journalctl -u v2ray` -->
-
-<!-- Please review your issue and check the format before submitting. -->
+Please review your issue before submitting.

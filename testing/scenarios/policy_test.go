@@ -6,24 +6,23 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/types/known/anypb"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/log"
-	"github.com/v2fly/v2ray-core/v5/app/policy"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/common"
-	clog "github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/uuid"
-	"github.com/v2fly/v2ray-core/v5/proxy/dokodemo"
-	"github.com/v2fly/v2ray-core/v5/proxy/freedom"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess/inbound"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess/outbound"
-	"github.com/v2fly/v2ray-core/v5/testing/servers/tcp"
+	"v2ray.com/core"
+	"v2ray.com/core/app/log"
+	"v2ray.com/core/app/policy"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/common"
+	clog "v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/common/uuid"
+	"v2ray.com/core/proxy/dokodemo"
+	"v2ray.com/core/proxy/freedom"
+	"v2ray.com/core/proxy/vmess"
+	"v2ray.com/core/proxy/vmess/inbound"
+	"v2ray.com/core/proxy/vmess/outbound"
+	"v2ray.com/core/testing/servers/tcp"
 )
 
 func startQuickClosingTCPServer() (net.Listener, error) {
@@ -55,7 +54,7 @@ func TestVMessClosing(t *testing.T) {
 	userID := protocol.NewID(uuid.New())
 	serverPort := tcp.PickPort()
 	serverConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&policy.Config{
 				Level: map[uint32]*policy.Policy{
 					0: {
@@ -78,7 +77,7 @@ func TestVMessClosing(t *testing.T) {
 						{
 							Account: serial.ToTypedMessage(&vmess.Account{
 								Id:      userID.String(),
-								AlterId: 0,
+								AlterId: 64,
 							}),
 						},
 					},
@@ -94,7 +93,7 @@ func TestVMessClosing(t *testing.T) {
 
 	clientPort := tcp.PickPort()
 	clientConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&policy.Config{
 				Level: map[uint32]*policy.Policy{
 					0: {
@@ -132,7 +131,7 @@ func TestVMessClosing(t *testing.T) {
 								{
 									Account: serial.ToTypedMessage(&vmess.Account{
 										Id:      userID.String(),
-										AlterId: 0,
+										AlterId: 64,
 										SecuritySettings: &protocol.SecurityConfig{
 											Type: protocol.SecurityType_AES128_GCM,
 										},
@@ -166,7 +165,7 @@ func TestZeroBuffer(t *testing.T) {
 	userID := protocol.NewID(uuid.New())
 	serverPort := tcp.PickPort()
 	serverConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&policy.Config{
 				Level: map[uint32]*policy.Policy{
 					0: {
@@ -192,7 +191,7 @@ func TestZeroBuffer(t *testing.T) {
 						{
 							Account: serial.ToTypedMessage(&vmess.Account{
 								Id:      userID.String(),
-								AlterId: 0,
+								AlterId: 64,
 							}),
 						},
 					},
@@ -208,9 +207,10 @@ func TestZeroBuffer(t *testing.T) {
 
 	clientPort := tcp.PickPort()
 	clientConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&log.Config{
-				Error: &log.LogSpecification{Level: clog.Severity_Debug, Type: log.LogType_Console},
+				ErrorLogLevel: clog.Severity_Debug,
+				ErrorLogType:  log.LogType_Console,
 			}),
 		},
 		Inbound: []*core.InboundHandlerConfig{
@@ -239,7 +239,7 @@ func TestZeroBuffer(t *testing.T) {
 								{
 									Account: serial.ToTypedMessage(&vmess.Account{
 										Id:      userID.String(),
-										AlterId: 0,
+										AlterId: 64,
 										SecuritySettings: &protocol.SecurityConfig{
 											Type: protocol.SecurityType_AES128_GCM,
 										},

@@ -1,13 +1,13 @@
 // Package session provides functions for sessions of incoming requests.
-package session
+package session // import "v2ray.com/core/common/session"
 
 import (
 	"context"
 	"math/rand"
 
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
+	"v2ray.com/core/common/errors"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
 )
 
 // ID of a session.
@@ -37,7 +37,7 @@ func ExportIDToError(ctx context.Context) errors.ExportOption {
 type Inbound struct {
 	// Source address of the inbound connection.
 	Source net.Destination
-	// Gateway address
+	// Getaway address
 	Gateway net.Destination
 	// Tag of the inbound proxy that handles the connection.
 	Tag string
@@ -51,15 +51,12 @@ type Outbound struct {
 	Target net.Destination
 	// Gateway address
 	Gateway net.Address
-	// Domain resolver to use when dialing
-	Resolver func(ctx context.Context, domain string) net.Address
 }
 
 // SniffingRequest controls the behavior of content sniffing.
 type SniffingRequest struct {
 	OverrideDestinationForProtocol []string
 	Enabled                        bool
-	MetadataOnly                   bool
 }
 
 // Content is the metadata of the connection content.
@@ -71,13 +68,13 @@ type Content struct {
 
 	Attributes map[string]string
 
-	SkipDNSResolve bool
+	SkipRoutePick bool
 }
 
 // Sockopt is the settings for socket connection.
 type Sockopt struct {
 	// Mark of the socket connection.
-	Mark uint32
+	Mark int32
 }
 
 // SetAttribute attachs additional string attributes to content.

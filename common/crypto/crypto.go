@@ -1,4 +1,4 @@
 // Package crypto provides common crypto libraries for V2Ray.
-package crypto
+package crypto // import "v2ray.com/core/common/crypto"
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen

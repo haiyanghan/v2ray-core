@@ -1,10 +1,12 @@
+// +build !confonly
+
 package websocket
 
 import (
 	"net/http"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
+	"v2ray.com/core/common"
+	"v2ray.com/core/transport/internet"
 )
 
 const protocolName = "websocket"

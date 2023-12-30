@@ -1,18 +1,17 @@
 package outbound
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
 	"strings"
 	"sync"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/features/outbound"
+	"v2ray.com/core"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/errors"
+	"v2ray.com/core/features/outbound"
 )
 
 // Manager is to manage all outbound handlers.
@@ -83,6 +82,9 @@ func (m *Manager) GetDefaultHandler() outbound.Handler {
 	m.access.RLock()
 	defer m.access.RUnlock()
 
+	if m.defaultHandler == nil {
+		return nil
+	}
 	return m.defaultHandler
 }
 
@@ -100,18 +102,13 @@ func (m *Manager) GetHandler(tag string) outbound.Handler {
 func (m *Manager) AddHandler(ctx context.Context, handler outbound.Handler) error {
 	m.access.Lock()
 	defer m.access.Unlock()
-	tag := handler.Tag()
 
-	if m.defaultHandler == nil ||
-		(len(tag) > 0 && tag == m.defaultHandler.Tag()) {
+	if m.defaultHandler == nil {
 		m.defaultHandler = handler
 	}
 
+	tag := handler.Tag()
 	if len(tag) > 0 {
-		if oldHandler, found := m.taggedHandler[tag]; found {
-			errors.New("will replace the existed outbound with the tag: " + tag).AtWarning().WriteToLog()
-			_ = oldHandler.Close()
-		}
 		m.taggedHandler[tag] = handler
 	} else {
 		m.untaggedHandlers = append(m.untaggedHandlers, handler)
@@ -132,18 +129,12 @@ func (m *Manager) RemoveHandler(ctx context.Context, tag string) error {
 	m.access.Lock()
 	defer m.access.Unlock()
 
-	if handler, found := m.taggedHandler[tag]; found {
-		if err := handler.Close(); err != nil {
-			newError("failed to close handler ", tag).Base(err).AtWarning().WriteToLog(session.ExportIDToError(ctx))
-		}
-		delete(m.taggedHandler, tag)
-		if m.defaultHandler != nil && m.defaultHandler.Tag() == tag {
-			m.defaultHandler = nil
-		}
-		return nil
+	delete(m.taggedHandler, tag)
+	if m.defaultHandler != nil && m.defaultHandler.Tag() == tag {
+		m.defaultHandler = nil
 	}
 
-	return common.ErrNoClue
+	return nil
 }
 
 // Select implements outbound.HandlerSelector.

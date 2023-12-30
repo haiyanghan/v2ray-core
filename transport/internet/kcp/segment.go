@@ -1,9 +1,11 @@
+// +build !confonly
+
 package kcp
 
 import (
 	"encoding/binary"
 
-	"github.com/v2fly/v2ray-core/v5/common/buf"
+	"v2ray.com/core/common/buf"
 )
 
 // Command is a KCP command that indicate the purpose of a Segment.

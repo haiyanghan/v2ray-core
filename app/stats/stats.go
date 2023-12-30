@@ -1,14 +1,16 @@
+// +build !confonly
+
 package stats
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
 	"sync"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	"github.com/v2fly/v2ray-core/v5/features/stats"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/errors"
+	"v2ray.com/core/features/stats"
 )
 
 // Manager is an implementation of stats.Manager.

@@ -1,6 +1,8 @@
+// +build !confonly
+
 package command
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
@@ -9,11 +11,11 @@ import (
 
 	grpc "google.golang.org/grpc"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/stats"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/strmatcher"
-	feature_stats "github.com/v2fly/v2ray-core/v5/features/stats"
+	"v2ray.com/core"
+	"v2ray.com/core/app/stats"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/strmatcher"
+	feature_stats "v2ray.com/core/features/stats"
 )
 
 // statsServer is an implementation of StatsService.
@@ -49,20 +51,9 @@ func (s *statsServer) GetStats(ctx context.Context, request *GetStatsRequest) (*
 }
 
 func (s *statsServer) QueryStats(ctx context.Context, request *QueryStatsRequest) (*QueryStatsResponse, error) {
-	mgroup := &strmatcher.LinearIndexMatcher{}
-	if request.Pattern != "" {
-		request.Patterns = append(request.Patterns, request.Pattern)
-	}
-	t := strmatcher.Substr
-	if request.Regexp {
-		t = strmatcher.Regex
-	}
-	for _, p := range request.Patterns {
-		m, err := t.New(p)
-		if err != nil {
-			return nil, err
-		}
-		mgroup.Add(m)
+	matcher, err := strmatcher.Substr.New(request.Pattern)
+	if err != nil {
+		return nil, err
 	}
 
 	response := &QueryStatsResponse{}
@@ -73,7 +64,7 @@ func (s *statsServer) QueryStats(ctx context.Context, request *QueryStatsRequest
 	}
 
 	manager.VisitCounters(func(name string, c feature_stats.Counter) bool {
-		if mgroup.Size() == 0 || len(mgroup.Match(name)) > 0 {
+		if matcher.Match(name) {
 			var value int64
 			if request.Reset_ {
 				value = c.Set(0)

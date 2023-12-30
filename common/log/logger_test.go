@@ -1,18 +1,19 @@
 package log_test
 
 import (
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	. "github.com/v2fly/v2ray-core/v5/common/log"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	. "v2ray.com/core/common/log"
 )
 
 func TestFileLogger(t *testing.T) {
-	f, err := os.CreateTemp("", "vtest")
+	f, err := ioutil.TempFile("", "vtest")
 	common.Must(err)
 	path := f.Name()
 	common.Must(f.Close())
@@ -28,7 +29,7 @@ func TestFileLogger(t *testing.T) {
 
 	f, err = os.Open(path)
 	common.Must(err)
-	defer f.Close()
+	defer f.Close() // nolint: errcheck
 
 	b, err := buf.ReadAllToBytes(f)
 	common.Must(err)

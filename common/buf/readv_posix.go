@@ -1,5 +1,6 @@
-//go:build !windows && !wasm && !illumos
-// +build !windows,!wasm,!illumos
+// +build !windows
+// +build !wasm
+// +build !illumos
 
 package buf
 

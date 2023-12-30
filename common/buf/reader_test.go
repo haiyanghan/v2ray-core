@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	. "github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/transport/pipe"
+	"v2ray.com/core/common"
+	. "v2ray.com/core/common/buf"
+	"v2ray.com/core/transport/pipe"
 )
 
 func TestBytesReaderWriteTo(t *testing.T) {
@@ -88,6 +88,7 @@ func TestReadBuffer(t *testing.T) {
 		}
 		buf.Release()
 	}
+
 }
 
 func TestReadAtMost(t *testing.T) {

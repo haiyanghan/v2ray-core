@@ -1,4 +1,4 @@
-package platform
+package platform // import "v2ray.com/core/common/platform"
 
 import (
 	"os"
@@ -49,7 +49,7 @@ func (f EnvFlag) GetValueAsInt(defaultValue int) int {
 }
 
 func NormalizeEnvName(name string) string {
-	return strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(name)), ".", "_")
+	return strings.Replace(strings.ToUpper(strings.TrimSpace(name)), ".", "_", -1)
 }
 
 func getExecutableDir() string {

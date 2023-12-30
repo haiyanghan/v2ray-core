@@ -1,3 +1,5 @@
+// +build !confonly
+
 package kcp
 
 import (
@@ -9,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/signal"
-	"github.com/v2fly/v2ray-core/v5/common/signal/semaphore"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/signal"
+	"v2ray.com/core/common/signal/semaphore"
 )
 
 var (
@@ -530,7 +532,7 @@ func (c *Connection) Terminate() {
 	}
 	newError("#", c.meta.Conversation, " terminating connection to ", c.RemoteAddr()).WriteToLog()
 
-	// v.SetState(StateTerminated)
+	//v.SetState(StateTerminated)
 	c.dataInput.Signal()
 	c.dataOutput.Signal()
 

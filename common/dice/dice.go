@@ -1,6 +1,6 @@
 // Package dice contains common functions to generate random number.
 // It also initialize math/rand with the time in seconds at launch time.
-package dice
+package dice // import "v2ray.com/core/common/dice"
 
 import (
 	"math/rand"
@@ -25,22 +25,22 @@ func RollDeterministic(n int, seed int64) int {
 
 // RollUint16 returns a random uint16 value.
 func RollUint16() uint16 {
-	return uint16(rand.Int63() >> 47)
+	return uint16(rand.Intn(65536))
 }
 
 func RollUint64() uint64 {
 	return rand.Uint64()
 }
 
-func NewDeterministicDice(seed int64) *DeterministicDice {
-	return &DeterministicDice{rand.New(rand.NewSource(seed))}
+func NewDeterministicDice(seed int64) *deterministicDice {
+	return &deterministicDice{rand.New(rand.NewSource(seed))}
 }
 
-type DeterministicDice struct {
+type deterministicDice struct {
 	*rand.Rand
 }
 
-func (dd *DeterministicDice) Roll(n int) int {
+func (dd *deterministicDice) Roll(n int) int {
 	if n == 1 {
 		return 0
 	}

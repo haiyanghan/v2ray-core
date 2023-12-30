@@ -3,12 +3,11 @@ package core_test
 import (
 	"context"
 	"testing"
-	_ "unsafe"
 
-	. "github.com/v2fly/v2ray-core/v5"
+	. "v2ray.com/core"
 )
 
-func TestFromContextPanic(t *testing.T) {
+func TestContextPanic(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {

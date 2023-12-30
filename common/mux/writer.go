@@ -1,12 +1,11 @@
 package mux
 
 import (
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/common/serial"
 )
 
 type Writer struct {
@@ -71,11 +70,7 @@ func writeMetaWithFrame(writer buf.Writer, meta FrameMetadata, data buf.MultiBuf
 		return err
 	}
 
-	if len(data)+1 > 64*1024*1024 {
-		return errors.New("value too large")
-	}
-	sliceSize := len(data) + 1
-	mb2 := make(buf.MultiBuffer, 0, sliceSize)
+	mb2 := make(buf.MultiBuffer, 0, len(data)+1)
 	mb2 = append(mb2, frame)
 	mb2 = append(mb2, data...)
 	return writer.WriteMultiBuffer(mb2)
@@ -126,6 +121,6 @@ func (w *Writer) Close() error {
 	frame := buf.New()
 	common.Must(meta.WriteTo(frame))
 
-	w.writer.WriteMultiBuffer(buf.MultiBuffer{frame})
+	w.writer.WriteMultiBuffer(buf.MultiBuffer{frame}) // nolint: errcheck
 	return nil
 }

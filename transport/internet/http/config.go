@@ -1,9 +1,11 @@
+// +build !confonly
+
 package http
 
 import (
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/dice"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/dice"
+	"v2ray.com/core/transport/internet"
 )
 
 const protocolName = "http"

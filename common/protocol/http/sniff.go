@@ -5,18 +5,31 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
 )
 
 type version byte
 
+const (
+	HTTP1 version = iota
+	HTTP2
+)
+
 type SniffHeader struct {
-	host string
+	version version
+	host    string
 }
 
 func (h *SniffHeader) Protocol() string {
-	return "http1"
+	switch h.version {
+	case HTTP1:
+		return "http1"
+	case HTTP2:
+		return "http2"
+	default:
+		return "unknown"
+	}
 }
 
 func (h *SniffHeader) Domain() string {
@@ -24,8 +37,7 @@ func (h *SniffHeader) Domain() string {
 }
 
 var (
-	// refer to https://pkg.go.dev/net/http@master#pkg-constants
-	methods = [...]string{"get", "post", "head", "put", "delete", "options", "connect", "patch", "trace"}
+	methods = [...]string{"get", "post", "head", "put", "delete", "options", "connect"}
 
 	errNotHTTPMethod = errors.New("not an HTTP method")
 )
@@ -49,7 +61,9 @@ func SniffHTTP(b []byte) (*SniffHeader, error) {
 		return nil, err
 	}
 
-	sh := &SniffHeader{}
+	sh := &SniffHeader{
+		version: HTTP1,
+	}
 
 	headers := bytes.Split(b, []byte{'\n'})
 	for i := 1; i < len(headers); i++ {

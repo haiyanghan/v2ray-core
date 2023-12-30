@@ -6,20 +6,17 @@ import (
 	"time"
 
 	xproxy "golang.org/x/net/proxy"
-	"google.golang.org/protobuf/types/known/anypb"
-
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/dns"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/app/router"
-	"github.com/v2fly/v2ray-core/v5/app/router/routercommon"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/proxy/blackhole"
-	"github.com/v2fly/v2ray-core/v5/proxy/freedom"
-	"github.com/v2fly/v2ray-core/v5/proxy/socks"
-	"github.com/v2fly/v2ray-core/v5/testing/servers/tcp"
+	"v2ray.com/core"
+	"v2ray.com/core/app/dns"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/app/router"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/proxy/blackhole"
+	"v2ray.com/core/proxy/freedom"
+	"v2ray.com/core/proxy/socks"
+	"v2ray.com/core/testing/servers/tcp"
 )
 
 func TestResolveIP(t *testing.T) {
@@ -32,17 +29,17 @@ func TestResolveIP(t *testing.T) {
 
 	serverPort := tcp.PickPort()
 	serverConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&dns.Config{
 				Hosts: map[string]*net.IPOrDomain{
 					"google.com": net.NewIPOrDomain(dest.Address),
 				},
 			}),
 			serial.ToTypedMessage(&router.Config{
-				DomainStrategy: router.DomainStrategy_IpIfNonMatch,
+				DomainStrategy: router.Config_IpIfNonMatch,
 				Rule: []*router.RoutingRule{
 					{
-						Cidr: []*routercommon.CIDR{
+						Cidr: []*router.CIDR{
 							{
 								Ip:     []byte{127, 0, 0, 0},
 								Prefix: 8,

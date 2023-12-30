@@ -3,26 +3,20 @@ package outbound
 import (
 	"context"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/dice"
-	"github.com/v2fly/v2ray-core/v5/common/environment"
-	"github.com/v2fly/v2ray-core/v5/common/environment/envctx"
-	"github.com/v2fly/v2ray-core/v5/common/mux"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/net/packetaddr"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/features/dns"
-	"github.com/v2fly/v2ray-core/v5/features/outbound"
-	"github.com/v2fly/v2ray-core/v5/features/policy"
-	"github.com/v2fly/v2ray-core/v5/features/stats"
-	"github.com/v2fly/v2ray-core/v5/proxy"
-	"github.com/v2fly/v2ray-core/v5/transport"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/security"
-	"github.com/v2fly/v2ray-core/v5/transport/pipe"
+	"v2ray.com/core"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/mux"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/features/outbound"
+	"v2ray.com/core/features/policy"
+	"v2ray.com/core/features/stats"
+	"v2ray.com/core/proxy"
+	"v2ray.com/core/transport"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/tls"
+	"v2ray.com/core/transport/pipe"
 )
 
 func getStatCounter(v *core.Instance, tag string) (stats.Counter, stats.Counter) {
@@ -52,7 +46,6 @@ func getStatCounter(v *core.Instance, tag string) (stats.Counter, stats.Counter)
 
 // Handler is an implements of outbound.Handler.
 type Handler struct {
-	ctx             context.Context
 	tag             string
 	senderSettings  *proxyman.SenderConfig
 	streamSettings  *internet.MemoryStreamConfig
@@ -61,7 +54,6 @@ type Handler struct {
 	mux             *mux.ClientManager
 	uplinkCounter   stats.Counter
 	downlinkCounter stats.Counter
-	dns             dns.Client
 }
 
 // NewHandler create a new Handler based on the given configuration.
@@ -69,7 +61,6 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 	v := core.MustFromContext(ctx)
 	uplinkCounter, downlinkCounter := getStatCounter(v, config.Tag)
 	h := &Handler{
-		ctx:             ctx,
 		tag:             config.Tag,
 		outboundManager: v.GetFeature(outbound.ManagerType()).(outbound.Manager),
 		uplinkCounter:   uplinkCounter,
@@ -77,7 +68,7 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 	}
 
 	if config.SenderSettings != nil {
-		senderSettings, err := serial.GetInstanceOf(config.SenderSettings)
+		senderSettings, err := config.SenderSettings.GetInstance()
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +85,7 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 		}
 	}
 
-	proxyConfig, err := serial.GetInstanceOf(config.ProxySettings)
+	proxyConfig, err := config.ProxySettings.GetInstance()
 	if err != nil {
 		return nil, err
 	}
@@ -117,26 +108,15 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 		h.mux = &mux.ClientManager{
 			Enabled: h.senderSettings.MultiplexSettings.Enabled,
 			Picker: &mux.IncrementalWorkerPicker{
-				Factory: mux.NewDialingWorkerFactory(
-					ctx,
-					proxyHandler,
-					h,
-					mux.ClientStrategy{
+				Factory: &mux.DialingWorkerFactory{
+					Proxy:  proxyHandler,
+					Dialer: h,
+					Strategy: mux.ClientStrategy{
 						MaxConcurrency: config.Concurrency,
 						MaxConnection:  128,
 					},
-				),
+				},
 			},
-		}
-	}
-
-	if h.senderSettings != nil && h.senderSettings.DomainStrategy != proxyman.SenderConfig_AS_IS {
-		err := core.RequireFeatures(ctx, func(d dns.Client) error {
-			h.dns = d
-			return nil
-		})
-		if err != nil {
-			return nil, err
 		}
 	}
 
@@ -151,31 +131,15 @@ func (h *Handler) Tag() string {
 
 // Dispatch implements proxy.Outbound.Dispatch.
 func (h *Handler) Dispatch(ctx context.Context, link *transport.Link) {
-	if h.senderSettings != nil && h.senderSettings.DomainStrategy != proxyman.SenderConfig_AS_IS {
-		outbound := session.OutboundFromContext(ctx)
-		if outbound == nil {
-			outbound = new(session.Outbound)
-			ctx = session.ContextWithOutbound(ctx, outbound)
-		}
-		if outbound.Target.Address != nil && outbound.Target.Address.Family().IsDomain() {
-			if addr := h.resolveIP(ctx, outbound.Target.Address.Domain(), h.Address()); addr != nil {
-				outbound.Target.Address = addr
-			}
-		}
-	}
 	if h.mux != nil && (h.mux.Enabled || session.MuxPreferedFromContext(ctx)) {
 		if err := h.mux.Dispatch(ctx, link); err != nil {
-			err := newError("failed to process mux outbound traffic").Base(err)
-			session.SubmitOutboundErrorToOriginator(ctx, err)
-			err.WriteToLog(session.ExportIDToError(ctx))
+			newError("failed to process mux outbound traffic").Base(err).WriteToLog(session.ExportIDToError(ctx))
 			common.Interrupt(link.Writer)
 		}
 	} else {
 		if err := h.proxy.Process(ctx, link, h); err != nil {
 			// Ensure outbound ray is properly closed.
-			err := newError("failed to process outbound traffic").Base(err)
-			session.SubmitOutboundErrorToOriginator(ctx, err)
-			err.WriteToLog(session.ExportIDToError(ctx))
+			newError("failed to process outbound traffic").Base(err).WriteToLog(session.ExportIDToError(ctx))
 			common.Interrupt(link.Writer)
 		} else {
 			common.Must(common.Close(link.Writer))
@@ -195,7 +159,7 @@ func (h *Handler) Address() net.Address {
 // Dial implements internet.Dialer.
 func (h *Handler) Dial(ctx context.Context, dest net.Destination) (internet.Connection, error) {
 	if h.senderSettings != nil {
-		if h.senderSettings.ProxySettings.HasTag() && !h.senderSettings.ProxySettings.TransportLayerProxy {
+		if h.senderSettings.ProxySettings.HasTag() {
 			tag := h.senderSettings.ProxySettings.Tag
 			handler := h.outboundManager.GetHandler(tag)
 			if handler != nil {
@@ -211,16 +175,9 @@ func (h *Handler) Dial(ctx context.Context, dest net.Destination) (internet.Conn
 				go handler.Dispatch(ctx, &transport.Link{Reader: uplinkReader, Writer: downlinkWriter})
 				conn := net.NewConnection(net.ConnectionInputMulti(uplinkWriter), net.ConnectionOutputMulti(downlinkReader))
 
-				securityEngine, err := security.CreateSecurityEngineFromSettings(ctx, h.streamSettings)
-				if err != nil {
-					return nil, newError("unable to create security engine").Base(err)
-				}
-
-				if securityEngine != nil {
-					conn, err = securityEngine.Client(conn, security.OptionWithDestination{Dest: dest})
-					if err != nil {
-						return nil, newError("unable to create security protocol client from security engine").Base(err)
-					}
+				if config := tls.ConfigFromStreamSettings(h.streamSettings); config != nil {
+					tlsConfig := config.GetTLSConfig(tls.WithDestination(dest))
+					conn = tls.Client(conn, tlsConfig)
 				}
 
 				return h.getStatCouterConnection(conn), nil
@@ -237,60 +194,10 @@ func (h *Handler) Dial(ctx context.Context, dest net.Destination) (internet.Conn
 			}
 			outbound.Gateway = h.senderSettings.Via.AsAddress()
 		}
-
-		if h.senderSettings.DomainStrategy != proxyman.SenderConfig_AS_IS {
-			outbound := session.OutboundFromContext(ctx)
-			if outbound == nil {
-				outbound = new(session.Outbound)
-				ctx = session.ContextWithOutbound(ctx, outbound)
-			}
-			outbound.Resolver = func(ctx context.Context, domain string) net.Address {
-				return h.resolveIP(ctx, domain, h.Address())
-			}
-		}
 	}
 
-	enablePacketAddrCapture := true
-	if h.senderSettings != nil && h.senderSettings.ProxySettings != nil && h.senderSettings.ProxySettings.HasTag() && h.senderSettings.ProxySettings.TransportLayerProxy {
-		tag := h.senderSettings.ProxySettings.Tag
-		newError("transport layer proxying to ", tag, " for dest ", dest).AtDebug().WriteToLog(session.ExportIDToError(ctx))
-		ctx = session.SetTransportLayerProxyTagToContext(ctx, tag)
-		enablePacketAddrCapture = false
-	}
-
-	if isStream, err := packetaddr.GetDestinationSubsetOf(dest); err == nil && enablePacketAddrCapture {
-		packetConn, err := internet.ListenSystemPacket(ctx, &net.UDPAddr{IP: net.AnyIP.IP(), Port: 0}, h.streamSettings.SocketSettings)
-		if err != nil {
-			return nil, newError("unable to listen socket").Base(err)
-		}
-		conn := packetaddr.ToPacketAddrConnWrapper(packetConn, isStream)
-		return h.getStatCouterConnection(conn), nil
-	}
-
-	proxyEnvironment := envctx.EnvironmentFromContext(h.ctx).(environment.ProxyEnvironment)
-	transportEnvironment, err := proxyEnvironment.NarrowScopeToTransport("transport")
-	if err != nil {
-		return nil, newError("unable to narrow environment to transport").Base(err)
-	}
-	ctx = envctx.ContextWithEnvironment(ctx, transportEnvironment)
 	conn, err := internet.Dial(ctx, dest, h.streamSettings)
 	return h.getStatCouterConnection(conn), err
-}
-
-func (h *Handler) resolveIP(ctx context.Context, domain string, localAddr net.Address) net.Address {
-	strategy := h.senderSettings.DomainStrategy
-	ips, err := dns.LookupIPWithOption(h.dns, domain, dns.IPOption{
-		IPv4Enable: strategy == proxyman.SenderConfig_USE_IP || strategy == proxyman.SenderConfig_USE_IP4 || (localAddr != nil && localAddr.Family().IsIPv4()),
-		IPv6Enable: strategy == proxyman.SenderConfig_USE_IP || strategy == proxyman.SenderConfig_USE_IP6 || (localAddr != nil && localAddr.Family().IsIPv6()),
-		FakeEnable: false,
-	})
-	if err != nil {
-		newError("failed to get IP address for domain ", domain).Base(err).WriteToLog(session.ExportIDToError(ctx))
-	}
-	if len(ips) == 0 {
-		return nil
-	}
-	return net.IPAddress(ips[dice.Roll(len(ips))])
 }
 
 func (h *Handler) getStatCouterConnection(conn internet.Connection) internet.Connection {
@@ -317,11 +224,5 @@ func (h *Handler) Start() error {
 // Close implements common.Closable.
 func (h *Handler) Close() error {
 	common.Close(h.mux)
-
-	if closableProxy, ok := h.proxy.(common.Closable); ok {
-		if err := closableProxy.Close(); err != nil {
-			return newError("unable to close proxy").Base(err)
-		}
-	}
 	return nil
 }

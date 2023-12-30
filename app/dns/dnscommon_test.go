@@ -1,3 +1,5 @@
+// +build !confonly
+
 package dns
 
 import (
@@ -8,10 +10,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/miekg/dns"
 	"golang.org/x/net/dns/dnsmessage"
-
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	dns_feature "github.com/v2fly/v2ray-core/v5/features/dns"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
 )
 
 func Test_parseResponse(t *testing.T) {
@@ -50,28 +50,20 @@ func Test_parseResponse(t *testing.T) {
 		want    *IPRecord
 		wantErr bool
 	}{
-		{
-			"empty",
+		{"empty",
 			&IPRecord{0, []net.Address(nil), time.Time{}, dnsmessage.RCodeSuccess},
 			false,
 		},
-		{
-			"error",
+		{"error",
 			nil,
 			true,
 		},
-		{
-			"a record",
-			&IPRecord{
-				1,
-				[]net.Address{net.ParseAddress("8.8.8.8"), net.ParseAddress("8.8.4.4")},
-				time.Time{},
-				dnsmessage.RCodeSuccess,
-			},
+		{"a record",
+			&IPRecord{1, []net.Address{net.ParseAddress("8.8.8.8"), net.ParseAddress("8.8.4.4")},
+				time.Time{}, dnsmessage.RCodeSuccess},
 			false,
 		},
-		{
-			"aaaa record",
+		{"aaaa record",
 			&IPRecord{2, []net.Address{net.ParseAddress("2001::123:8888"), net.ParseAddress("2001::123:8844")}, time.Time{}, dnsmessage.RCodeSuccess},
 			false,
 		},
@@ -97,12 +89,13 @@ func Test_parseResponse(t *testing.T) {
 }
 
 func Test_buildReqMsgs(t *testing.T) {
+
 	stubID := func() uint16 {
 		return uint16(rand.Uint32())
 	}
 	type args struct {
 		domain  string
-		option  dns_feature.IPOption
+		option  IPOption
 		reqOpts *dnsmessage.Resource
 	}
 	tests := []struct {
@@ -110,26 +103,10 @@ func Test_buildReqMsgs(t *testing.T) {
 		args args
 		want int
 	}{
-		{"dual stack", args{"test.com", dns_feature.IPOption{
-			IPv4Enable: true,
-			IPv6Enable: true,
-			FakeEnable: false,
-		}, nil}, 2},
-		{"ipv4 only", args{"test.com", dns_feature.IPOption{
-			IPv4Enable: true,
-			IPv6Enable: false,
-			FakeEnable: false,
-		}, nil}, 1},
-		{"ipv6 only", args{"test.com", dns_feature.IPOption{
-			IPv4Enable: false,
-			IPv6Enable: true,
-			FakeEnable: false,
-		}, nil}, 1},
-		{"none/error", args{"test.com", dns_feature.IPOption{
-			IPv4Enable: false,
-			IPv6Enable: false,
-			FakeEnable: false,
-		}, nil}, 0},
+		{"dual stack", args{"test.com", IPOption{true, true}, nil}, 2},
+		{"ipv4 only", args{"test.com", IPOption{true, false}, nil}, 1},
+		{"ipv6 only", args{"test.com", IPOption{false, true}, nil}, 1},
+		{"none/error", args{"test.com", IPOption{false, false}, nil}, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,8 +148,8 @@ func TestFqdn(t *testing.T) {
 		args args
 		want string
 	}{
-		{"with fqdn", args{"www.v2fly.org."}, "www.v2fly.org."},
-		{"without fqdn", args{"www.v2fly.org"}, "www.v2fly.org."},
+		{"with fqdn", args{"www.v2ray.com."}, "www.v2ray.com."},
+		{"without fqdn", args{"www.v2ray.com"}, "www.v2ray.com."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

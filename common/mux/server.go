@@ -2,19 +2,20 @@ package mux
 
 import (
 	"context"
+	"fmt"
 	"io"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	"github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	"github.com/v2fly/v2ray-core/v5/transport"
-	"github.com/v2fly/v2ray-core/v5/transport/pipe"
+	"v2ray.com/core"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/errors"
+	"v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/features/routing"
+	"v2ray.com/core/transport"
+	"v2ray.com/core/transport/pipe"
 )
 
 type Server struct {
@@ -204,6 +205,7 @@ func (w *ServerWorker) handleStatusEnd(meta *FrameMetadata, reader *buf.Buffered
 func (w *ServerWorker) handleFrame(ctx context.Context, reader *buf.BufferedReader) error {
 	var meta FrameMetadata
 	err := meta.Unmarshal(reader)
+	fmt.Printf("meta, id:%+v, target: %+v, sessionStatus: %+v \n", meta.SessionID, meta.Target, meta.SessionStatus)
 	if err != nil {
 		return newError("failed to read metadata").Base(err)
 	}
@@ -232,13 +234,15 @@ func (w *ServerWorker) run(ctx context.Context) {
 	input := w.link.Reader
 	reader := &buf.BufferedReader{Reader: input}
 
-	defer w.sessionManager.Close()
+	defer w.sessionManager.Close() // nolint: errcheck
 
 	for {
 		select {
 		case <-ctx.Done():
+			fmt.Println("ctx.Done()...")
 			return
 		default:
+			fmt.Println("handleFrame...")
 			err := w.handleFrame(ctx, reader)
 			if err != nil {
 				if errors.Cause(err) != io.EOF {

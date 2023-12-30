@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/task"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/task"
 )
 
 type ActivityUpdater interface {
@@ -45,7 +45,7 @@ func (t *ActivityTimer) finish() {
 		t.onTimeout = nil
 	}
 	if t.checkTask != nil {
-		t.checkTask.Close()
+		t.checkTask.Close() // nolint: errcheck
 		t.checkTask = nil
 	}
 }
@@ -64,7 +64,7 @@ func (t *ActivityTimer) SetTimeout(timeout time.Duration) {
 	t.Lock()
 
 	if t.checkTask != nil {
-		t.checkTask.Close()
+		t.checkTask.Close() // nolint: errcheck
 	}
 	t.checkTask = checkTask
 	t.Unlock()

@@ -1,24 +1,25 @@
+// +build !confonly
+
 package shadowsocks
 
 import (
 	"context"
 	"time"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/net/packetaddr"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	udp_proto "github.com/v2fly/v2ray-core/v5/common/protocol/udp"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/common/signal"
-	"github.com/v2fly/v2ray-core/v5/common/task"
-	"github.com/v2fly/v2ray-core/v5/features/policy"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/udp"
+	"v2ray.com/core"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	udp_proto "v2ray.com/core/common/protocol/udp"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/common/signal"
+	"v2ray.com/core/common/task"
+	"v2ray.com/core/features/policy"
+	"v2ray.com/core/features/routing"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/udp"
 )
 
 type Server struct {
@@ -71,23 +72,10 @@ func (s *Server) Process(ctx context.Context, network net.Network, conn internet
 }
 
 func (s *Server) handlerUDPPayload(ctx context.Context, conn internet.Connection, dispatcher routing.Dispatcher) error {
-	udpDispatcherConstructor := udp.NewSplitDispatcher
-	switch s.config.PacketEncoding {
-	case packetaddr.PacketAddrType_None:
-		break
-	case packetaddr.PacketAddrType_Packet:
-		packetAddrDispatcherFactory := udp.NewPacketAddrDispatcherCreator(ctx)
-		udpDispatcherConstructor = packetAddrDispatcherFactory.NewPacketAddrDispatcher
-	}
-
-	udpServer := udpDispatcherConstructor(dispatcher, func(ctx context.Context, packet *udp_proto.Packet) {
+	udpServer := udp.NewDispatcher(dispatcher, func(ctx context.Context, packet *udp_proto.Packet) {
 		request := protocol.RequestHeaderFromContext(ctx)
 		if request == nil {
-			request = &protocol.RequestHeader{
-				Port:    packet.Source.Port,
-				Address: packet.Source.Address,
-				User:    s.user,
-			}
+			return
 		}
 
 		payload := packet.Payload
@@ -234,7 +222,7 @@ func (s *Server) handleConnection(ctx context.Context, conn internet.Connection,
 		return nil
 	}
 
-	requestDoneAndCloseWriter := task.OnSuccess(requestDone, task.Close(link.Writer))
+	var requestDoneAndCloseWriter = task.OnSuccess(requestDone, task.Close(link.Writer))
 	if err := task.Run(ctx, requestDoneAndCloseWriter, responseDone); err != nil {
 		common.Interrupt(link.Reader)
 		common.Interrupt(link.Writer)

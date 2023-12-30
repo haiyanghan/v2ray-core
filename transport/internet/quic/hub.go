@@ -1,38 +1,39 @@
+// +build !confonly
+
 package quic
 
 import (
 	"context"
 	"time"
 
-	"github.com/quic-go/quic-go"
-
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol/tls/cert"
-	"github.com/v2fly/v2ray-core/v5/common/signal/done"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/tls"
+	"github.com/lucas-clemente/quic-go"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol/tls/cert"
+	"v2ray.com/core/common/signal/done"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/tls"
 )
 
 // Listener is an internet.Listener that listens for TCP connections.
 type Listener struct {
 	rawConn  *sysConn
-	listener *quic.Listener
+	listener quic.Listener
 	done     *done.Instance
 	addConn  internet.ConnHandler
 }
 
-func (l *Listener) acceptStreams(conn quic.Connection) {
+func (l *Listener) acceptStreams(session quic.Session) {
 	for {
-		stream, err := conn.AcceptStream(context.Background())
+		stream, err := session.AcceptStream(context.Background())
 		if err != nil {
 			newError("failed to accept stream").Base(err).WriteToLog()
 			select {
-			case <-conn.Context().Done():
+			case <-session.Context().Done():
 				return
 			case <-l.done.Wait():
-				if err := conn.CloseWithError(0, ""); err != nil {
-					newError("failed to close connection").Base(err).WriteToLog()
+				if err := session.CloseWithError(0, ""); err != nil {
+					newError("failed to close session").Base(err).WriteToLog()
 				}
 				return
 			default:
@@ -43,19 +44,20 @@ func (l *Listener) acceptStreams(conn quic.Connection) {
 
 		conn := &interConn{
 			stream: stream,
-			local:  conn.LocalAddr(),
-			remote: conn.RemoteAddr(),
+			local:  session.LocalAddr(),
+			remote: session.RemoteAddr(),
 		}
 
 		l.addConn(conn)
 	}
+
 }
 
 func (l *Listener) keepAccepting() {
 	for {
 		conn, err := l.listener.Accept(context.Background())
 		if err != nil {
-			newError("failed to accept QUIC connections").Base(err).WriteToLog()
+			newError("failed to accept QUIC sessions").Base(err).WriteToLog()
 			if l.done.Done() {
 				break
 			}
@@ -97,30 +99,26 @@ func Listen(ctx context.Context, address net.Address, port net.Port, streamSetti
 		IP:   address.IP(),
 		Port: int(port),
 	}, streamSettings.SocketSettings)
+
 	if err != nil {
 		return nil, err
 	}
 
 	quicConfig := &quic.Config{
-		HandshakeIdleTimeout:  time.Second * 8,
+		ConnectionIDLength:    12,
+		HandshakeTimeout:      time.Second * 8,
 		MaxIdleTimeout:        time.Second * 45,
 		MaxIncomingStreams:    32,
 		MaxIncomingUniStreams: -1,
-		KeepAlivePeriod:       time.Second * 15,
 	}
 
-	conn, err := wrapSysConn(rawConn.(*net.UDPConn), config)
+	conn, err := wrapSysConn(rawConn, config)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
 
-	tr := quic.Transport{
-		Conn:               conn,
-		ConnectionIDLength: 12,
-	}
-
-	qListener, err := tr.Listen(tlsConfig.GetTLSConfig(), quicConfig)
+	qListener, err := quic.Listen(conn, tlsConfig.GetTLSConfig(), quicConfig)
 	if err != nil {
 		conn.Close()
 		return nil, err

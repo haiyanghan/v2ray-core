@@ -1,23 +1,22 @@
+// +build !confonly
+
 package core
 
 import (
 	"context"
 	"reflect"
-	sync "sync"
+	"sync"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/environment"
-	"github.com/v2fly/v2ray-core/v5/common/environment/systemnetworkimpl"
-	"github.com/v2fly/v2ray-core/v5/common/environment/transientstorageimpl"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/features"
-	"github.com/v2fly/v2ray-core/v5/features/dns"
-	"github.com/v2fly/v2ray-core/v5/features/dns/localdns"
-	"github.com/v2fly/v2ray-core/v5/features/inbound"
-	"github.com/v2fly/v2ray-core/v5/features/outbound"
-	"github.com/v2fly/v2ray-core/v5/features/policy"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	"github.com/v2fly/v2ray-core/v5/features/stats"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/features"
+	"v2ray.com/core/features/dns"
+	"v2ray.com/core/features/dns/localdns"
+	"v2ray.com/core/features/inbound"
+	"v2ray.com/core/features/outbound"
+	"v2ray.com/core/features/policy"
+	"v2ray.com/core/features/routing"
+	"v2ray.com/core/features/stats"
 )
 
 // Server is an instance of V2Ray. At any time, there must be at most one Server instance running.
@@ -93,15 +92,13 @@ type Instance struct {
 	features           []features.Feature
 	featureResolutions []resolution
 	running            bool
-	env                environment.RootEnvironment
 
 	ctx context.Context
 }
 
 func AddInboundHandler(server *Instance, config *InboundHandlerConfig) error {
 	inboundManager := server.GetFeature(inbound.ManagerType()).(inbound.Manager)
-	proxyEnv := server.env.ProxyEnvironment("i" + config.Tag)
-	rawHandler, err := CreateObjectWithEnvironment(server, config, proxyEnv)
+	rawHandler, err := CreateObject(server, config)
 	if err != nil {
 		return err
 	}
@@ -127,8 +124,7 @@ func addInboundHandlers(server *Instance, configs []*InboundHandlerConfig) error
 
 func AddOutboundHandler(server *Instance, config *OutboundHandlerConfig) error {
 	outboundManager := server.GetFeature(outbound.ManagerType()).(outbound.Manager)
-	proxyEnv := server.env.ProxyEnvironment("o" + config.Tag)
-	rawHandler, err := CreateObjectWithEnvironment(server, config, proxyEnv)
+	rawHandler, err := CreateObject(server, config)
 	if err != nil {
 		return err
 	}
@@ -137,18 +133,6 @@ func AddOutboundHandler(server *Instance, config *OutboundHandlerConfig) error {
 		return newError("not an OutboundHandler")
 	}
 	if err := outboundManager.AddHandler(server.ctx, handler); err != nil {
-		return err
-	}
-	return nil
-}
-
-func RemoveOutboundHandler(server *Instance, tag string) error {
-	outboundManager := server.GetFeature(outbound.ManagerType()).(outbound.Manager)
-	if err := outboundManager.RemoveHandler(server.ctx, tag); err != nil {
-		return err
-	}
-
-	if err := server.env.DropProxyEnvironment("o" + tag); err != nil {
 		return err
 	}
 	return nil
@@ -175,9 +159,9 @@ func RequireFeatures(ctx context.Context, callback interface{}) error {
 // The instance is not started at this point.
 // To ensure V2Ray instance works properly, the config must contain one Dispatcher, one InboundHandlerManager and one OutboundHandlerManager. Other features are optional.
 func New(config *Config) (*Instance, error) {
-	server := &Instance{ctx: context.Background()}
+	var server = &Instance{ctx: context.Background()}
 
-	done, err := initInstanceWithConfig(config, server)
+	err, done := initInstanceWithConfig(config, server)
 	if done {
 		return nil, err
 	}
@@ -185,10 +169,10 @@ func New(config *Config) (*Instance, error) {
 	return server, nil
 }
 
-func NewWithContext(ctx context.Context, config *Config) (*Instance, error) {
-	server := &Instance{ctx: ctx}
+func NewWithContext(config *Config, ctx context.Context) (*Instance, error) {
+	var server = &Instance{ctx: ctx}
 
-	done, err := initInstanceWithConfig(config, server)
+	err, done := initInstanceWithConfig(config, server)
 	if done {
 		return nil, err
 	}
@@ -196,31 +180,26 @@ func NewWithContext(ctx context.Context, config *Config) (*Instance, error) {
 	return server, nil
 }
 
-func initInstanceWithConfig(config *Config, server *Instance) (bool, error) {
+func initInstanceWithConfig(config *Config, server *Instance) (error, bool) {
 	if config.Transport != nil {
 		features.PrintDeprecatedFeatureWarning("global transport settings")
 	}
 	if err := config.Transport.Apply(); err != nil {
-		return true, err
+		return err, true
 	}
 
-	defaultNetworkImpl := systemnetworkimpl.NewSystemNetworkDefault()
-	server.env = environment.NewRootEnvImpl(server.ctx, transientstorageimpl.NewScopedTransientStorageImpl(), defaultNetworkImpl.Dialer(), defaultNetworkImpl.Listener())
-
 	for _, appSettings := range config.App {
-		settings, err := serial.GetInstanceOf(appSettings)
+		settings, err := appSettings.GetInstance()
 		if err != nil {
-			return true, err
+			return err, true
 		}
-		key := appSettings.TypeUrl
-		appEnv := server.env.AppEnvironment(key)
-		obj, err := CreateObjectWithEnvironment(server, settings, appEnv)
+		obj, err := CreateObject(server, settings)
 		if err != nil {
-			return true, err
+			return err, true
 		}
 		if feature, ok := obj.(features.Feature); ok {
 			if err := server.AddFeature(feature); err != nil {
-				return true, err
+				return err, true
 			}
 		}
 	}
@@ -238,23 +217,23 @@ func initInstanceWithConfig(config *Config, server *Instance) (bool, error) {
 	for _, f := range essentialFeatures {
 		if server.GetFeature(f.Type) == nil {
 			if err := server.AddFeature(f.Instance); err != nil {
-				return true, err
+				return err, true
 			}
 		}
 	}
 
 	if server.featureResolutions != nil {
-		return true, newError("not all dependency are resolved.")
+		return newError("not all dependency are resolved."), true
 	}
 
 	if err := addInboundHandlers(server, config.Inbound); err != nil {
-		return true, err
+		return err, true
 	}
 
 	if err := addOutboundHandlers(server, config.Outbound); err != nil {
-		return true, err
+		return err, true
 	}
-	return false, nil
+	return nil, false
 }
 
 // Type implements common.HasType.

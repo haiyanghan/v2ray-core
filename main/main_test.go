@@ -1,4 +1,3 @@
-//go:build coveragemain
 // +build coveragemain
 
 package main

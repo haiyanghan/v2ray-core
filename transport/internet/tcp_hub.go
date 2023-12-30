@@ -3,10 +3,12 @@ package internet
 import (
 	"context"
 
-	"github.com/v2fly/v2ray-core/v5/common/net"
+	"v2ray.com/core/common/net"
 )
 
-var transportListenerCache = make(map[string]ListenFunc)
+var (
+	transportListenerCache = make(map[string]ListenFunc)
+)
 
 func RegisterTransportListener(protocol string, listener ListenFunc) error {
 	if _, found := transportListenerCache[protocol]; found {
@@ -23,33 +25,6 @@ type ListenFunc func(ctx context.Context, address net.Address, port net.Port, se
 type Listener interface {
 	Close() error
 	Addr() net.Addr
-}
-
-// ListenUnix is the UDS version of ListenTCP
-func ListenUnix(ctx context.Context, address net.Address, settings *MemoryStreamConfig, handler ConnHandler) (Listener, error) {
-	if settings == nil {
-		s, err := ToMemoryStreamConfig(nil)
-		if err != nil {
-			return nil, newError("failed to create default unix stream settings").Base(err)
-		}
-		settings = s
-	}
-
-	protocol := settings.ProtocolName
-
-	if originalProtocolName := getOriginalMessageName(settings); originalProtocolName != "" {
-		protocol = originalProtocolName
-	}
-
-	listenFunc := transportListenerCache[protocol]
-	if listenFunc == nil {
-		return nil, newError(protocol, " unix istener not registered.").AtError()
-	}
-	listener, err := listenFunc(ctx, address, net.Port(0), settings, handler)
-	if err != nil {
-		return nil, newError("failed to listen on unix address: ", address).Base(err)
-	}
-	return listener, nil
 }
 
 func ListenTCP(ctx context.Context, address net.Address, port net.Port, settings *MemoryStreamConfig, handler ConnHandler) (Listener, error) {
@@ -70,11 +45,6 @@ func ListenTCP(ctx context.Context, address net.Address, port net.Port, settings
 	}
 
 	protocol := settings.ProtocolName
-
-	if originalProtocolName := getOriginalMessageName(settings); originalProtocolName != "" {
-		protocol = originalProtocolName
-	}
-
 	listenFunc := transportListenerCache[protocol]
 	if listenFunc == nil {
 		return nil, newError(protocol, " listener not registered.").AtError()

@@ -4,12 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
-	. "github.com/v2fly/v2ray-core/v5/common/retry"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/errors"
+	. "v2ray.com/core/common/retry"
 )
 
-var errorTestOnly = errors.New("this is a fake error")
+var (
+	errorTestOnly = errors.New("This is a fake error.")
+)
 
 func TestNoRetry(t *testing.T) {
 	startTime := time.Now().Unix()

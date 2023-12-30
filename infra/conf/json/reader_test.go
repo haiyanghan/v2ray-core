@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	. "github.com/v2fly/v2ray-core/v5/infra/conf/json"
+	"v2ray.com/core/common"
+	. "v2ray.com/core/infra/conf/json"
 )
 
 func TestReader(t *testing.T) {
@@ -24,8 +24,7 @@ content 2`,
 			`
 content 
 
-content 2`,
-		},
+content 2`},
 		{`content`, `content`},
 		{" ", " "},
 		{`con/*abcd*/tent`, "content"},
@@ -62,7 +61,7 @@ func TestReader1(t *testing.T) {
 		output string
 	}
 
-	bufLen := 1
+	bufLen := 8
 
 	data := []dataStruct{
 		{"loooooooooooooooooooooooooooooooooooooooog", "loooooooooooooooooooooooooooooooooooooooog"},
@@ -70,7 +69,6 @@ func TestReader1(t *testing.T) {
 		{`{"t": "\/test"}`, `{"t": "\/test"}`},
 		{`"\// fake comment"`, `"\// fake comment"`},
 		{`"\/\/\/\/\/"`, `"\/\/\/\/\/"`},
-		{`/test/test`, `/test/test`},
 	}
 
 	for _, testCase := range data {
@@ -95,4 +93,5 @@ func TestReader1(t *testing.T) {
 			t.Error("got ", string(target), " want ", testCase.output)
 		}
 	}
+
 }

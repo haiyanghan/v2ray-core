@@ -2,12 +2,13 @@ package vmess_test
 
 import (
 	"testing"
+	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/uuid"
-	. "github.com/v2fly/v2ray-core/v5/proxy/vmess"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/common/uuid"
+	. "v2ray.com/core/proxy/vmess"
 )
 
 func toAccount(a *Account) protocol.Account {
@@ -32,8 +33,8 @@ func TestUserValidator(t *testing.T) {
 	common.Must(v.Add(user))
 
 	{
-		testSmallLag := func(lag int64) {
-			ts := int64(v.GetBaseTime()) + lag + 240
+		testSmallLag := func(lag time.Duration) {
+			ts := protocol.Timestamp(time.Now().Add(time.Second * lag).Unix())
 			idHash := hasher(id.Bytes())
 			common.Must2(serial.WriteUint64(idHash, uint64(ts)))
 			userHash := idHash.Sum(nil)
@@ -45,7 +46,7 @@ func TestUserValidator(t *testing.T) {
 			if euser.Email != user.Email {
 				t.Error("unexpected user email: ", euser.Email, " want ", user.Email)
 			}
-			if int64(ets) != ts {
+			if ets != ts {
 				t.Error("unexpected timestamp: ", ets, " want ", ts)
 			}
 		}
@@ -60,8 +61,8 @@ func TestUserValidator(t *testing.T) {
 	}
 
 	{
-		testBigLag := func(lag int64) {
-			ts := int64(v.GetBaseTime()) + lag + 240
+		testBigLag := func(lag time.Duration) {
+			ts := protocol.Timestamp(time.Now().Add(time.Second * lag).Unix())
 			idHash := hasher(id.Bytes())
 			common.Must2(serial.WriteUint64(idHash, uint64(ts)))
 			userHash := idHash.Sum(nil)

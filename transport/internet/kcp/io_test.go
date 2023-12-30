@@ -3,7 +3,7 @@ package kcp_test
 import (
 	"testing"
 
-	. "github.com/v2fly/v2ray-core/v5/transport/internet/kcp"
+	. "v2ray.com/core/transport/internet/kcp"
 )
 
 func TestKCPPacketReader(t *testing.T) {
@@ -33,4 +33,5 @@ func TestKCPPacketReader(t *testing.T) {
 			t.Errorf("Expect some output, but got nil")
 		}
 	}
+
 }

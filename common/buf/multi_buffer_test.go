@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"crypto/rand"
 	"io"
-	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"io/ioutil"
+	"os"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	. "github.com/v2fly/v2ray-core/v5/common/buf"
+	"v2ray.com/core/common"
+	. "v2ray.com/core/common/buf"
 )
 
 func TestMultiBufferRead(t *testing.T) {
@@ -107,8 +108,9 @@ func TestMultiBufferReadAllToByte(t *testing.T) {
 		common.Must(err)
 
 		if l := len(b); l != 8*1024 {
-			t.Error("unexpected length from ReadAllToBytes", l)
+			t.Error("unexpceted length from ReadAllToBytes", l)
 		}
+
 	}
 	{
 		const dat = "data/test_MultiBufferReadAllToByte.dat"
@@ -119,7 +121,7 @@ func TestMultiBufferReadAllToByte(t *testing.T) {
 		common.Must(err)
 		f.Close()
 
-		cnt, err := os.ReadFile(dat)
+		cnt, err := ioutil.ReadFile(dat)
 		common.Must(err)
 
 		if d := cmp.Diff(buf2, cnt); d != "" {
@@ -140,7 +142,7 @@ func TestMultiBufferCopy(t *testing.T) {
 	mb.Copy(lbdst)
 
 	if d := cmp.Diff(lb, lbdst); d != "" {
-		t.Error("unexpected different from MultiBufferCopy ", d)
+		t.Error("unexpceted different from MultiBufferCopy ", d)
 	}
 }
 

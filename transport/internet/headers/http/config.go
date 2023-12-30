@@ -3,7 +3,7 @@ package http
 import (
 	"strings"
 
-	"github.com/v2fly/v2ray-core/v5/common/dice"
+	"v2ray.com/core/common/dice"
 )
 
 func pickString(arr []string) string {
@@ -18,7 +18,7 @@ func pickString(arr []string) string {
 	}
 }
 
-func (v *RequestConfig) PickURI() string {
+func (v *RequestConfig) PickUri() string {
 	return pickString(v.Uri)
 }
 

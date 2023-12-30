@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	. "github.com/v2fly/v2ray-core/v5/transport/internet/headers/http"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/net"
+	. "v2ray.com/core/transport/internet/headers/http"
 )
 
 func TestReaderWriter(t *testing.T) {
@@ -29,14 +29,19 @@ func TestReaderWriter(t *testing.T) {
 	common.Must(err)
 
 	reader := &HeaderReader{}
-	_, err = reader.Read(cache)
+	buffer, err := reader.Read(cache)
 	if err != nil && !strings.HasPrefix(err.Error(), "malformed HTTP request") {
 		t.Error("unknown error ", err)
 	}
+	_ = buffer
+	/*
+		if buffer.String() != "efg" {
+			t.Error("buffer: ", buffer.String())
+		}*/
 }
 
 func TestRequestHeader(t *testing.T) {
-	auth, err := NewAuthenticator(context.Background(), &Config{
+	auth, err := NewHttpAuthenticator(context.Background(), &Config{
 		Request: &RequestConfig{
 			Uri: []string{"/"},
 			Header: []*Header{
@@ -61,26 +66,32 @@ func TestRequestHeader(t *testing.T) {
 func TestLongRequestHeader(t *testing.T) {
 	payload := make([]byte, buf.Size+2)
 	common.Must2(rand.Read(payload[:buf.Size-2]))
-	copy(payload[buf.Size-2:], ENDING)
+	copy(payload[buf.Size-2:], []byte(ENDING))
 	payload = append(payload, []byte("abcd")...)
 
 	reader := HeaderReader{}
-	_, err := reader.Read(bytes.NewReader(payload))
+	b, err := reader.Read(bytes.NewReader(payload))
 
 	if err != nil && !(strings.HasPrefix(err.Error(), "invalid") || strings.HasPrefix(err.Error(), "malformed")) {
 		t.Error("unknown error ", err)
 	}
+	_ = b
+	/*
+		common.Must(err)
+		if b.String() != "abcd" {
+			t.Error("expect content abcd, but actually ", b.String())
+		}*/
 }
 
 func TestConnection(t *testing.T) {
-	auth, err := NewAuthenticator(context.Background(), &Config{
+	auth, err := NewHttpAuthenticator(context.Background(), &Config{
 		Request: &RequestConfig{
 			Method: &Method{Value: "Post"},
 			Uri:    []string{"/testpath"},
 			Header: []*Header{
 				{
 					Name:  "Host",
-					Value: []string{"www.v2fly.org", "www.google.com"},
+					Value: []string{"www.v2ray.com", "www.google.com"},
 				},
 				{
 					Name:  "User-Agent",
@@ -146,14 +157,14 @@ func TestConnection(t *testing.T) {
 }
 
 func TestConnectionInvPath(t *testing.T) {
-	auth, err := NewAuthenticator(context.Background(), &Config{
+	auth, err := NewHttpAuthenticator(context.Background(), &Config{
 		Request: &RequestConfig{
 			Method: &Method{Value: "Post"},
 			Uri:    []string{"/testpath"},
 			Header: []*Header{
 				{
 					Name:  "Host",
-					Value: []string{"www.v2fly.org", "www.google.com"},
+					Value: []string{"www.v2ray.com", "www.google.com"},
 				},
 				{
 					Name:  "User-Agent",
@@ -173,14 +184,14 @@ func TestConnectionInvPath(t *testing.T) {
 	})
 	common.Must(err)
 
-	authR, err := NewAuthenticator(context.Background(), &Config{
+	authR, err := NewHttpAuthenticator(context.Background(), &Config{
 		Request: &RequestConfig{
 			Method: &Method{Value: "Post"},
 			Uri:    []string{"/testpathErr"},
 			Header: []*Header{
 				{
 					Name:  "Host",
-					Value: []string{"www.v2fly.org", "www.google.com"},
+					Value: []string{"www.v2ray.com", "www.google.com"},
 				},
 				{
 					Name:  "User-Agent",
@@ -247,14 +258,14 @@ func TestConnectionInvPath(t *testing.T) {
 }
 
 func TestConnectionInvReq(t *testing.T) {
-	auth, err := NewAuthenticator(context.Background(), &Config{
+	auth, err := NewHttpAuthenticator(context.Background(), &Config{
 		Request: &RequestConfig{
 			Method: &Method{Value: "Post"},
 			Uri:    []string{"/testpath"},
 			Header: []*Header{
 				{
 					Name:  "Host",
-					Value: []string{"www.v2fly.org", "www.google.com"},
+					Value: []string{"www.v2ray.com", "www.google.com"},
 				},
 				{
 					Name:  "User-Agent",

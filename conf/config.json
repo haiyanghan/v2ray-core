@@ -1,0 +1,33 @@
+{
+    "inbounds":[
+        {
+            "port":1122,
+            "protocol":"vmess",
+            "settings":{
+                "clients":[
+                    {
+                        "id":"433b7c4c-40af-4e9d-9df0-434b9203f46c",
+                        "alterId":64
+                    }
+                ]
+            }
+        },
+        {
+            "port":2211,
+            "protocol":"shadowsocks",
+            "settings":{
+                "method":"aes-256-cfb",
+                "udp":true,
+                "password":"qwertyuiop123"
+            }
+        }
+    ],
+    "outbounds":[
+        {
+            "protocol":"freedom",
+            "settings":{
+
+            }
+        }
+    ]
+}

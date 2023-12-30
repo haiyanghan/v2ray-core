@@ -5,10 +5,9 @@ import (
 	"sync"
 
 	"golang.org/x/net/dns/dnsmessage"
-
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/serial"
 )
 
 func PackMessage(msg *dnsmessage.Message) (*buf.Buffer, error) {

@@ -1,14 +1,15 @@
+// +build !confonly
+
 package log
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
-	"reflect"
 	"sync"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/log"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/log"
 )
 
 // Instance is a log.Handler that handles logs.
@@ -17,20 +18,11 @@ type Instance struct {
 	config       *Config
 	accessLogger log.Handler
 	errorLogger  log.Handler
-	followers    map[reflect.Value]func(msg log.Message)
 	active       bool
 }
 
 // New creates a new log.Instance based on the given config.
 func New(ctx context.Context, config *Config) (*Instance, error) {
-	if config.Error == nil {
-		config.Error = &LogSpecification{Type: LogType_Console, Level: log.Severity_Warning}
-	}
-
-	if config.Access == nil {
-		config.Access = &LogSpecification{Type: LogType_None}
-	}
-
 	g := &Instance{
 		config: config,
 		active: false,
@@ -48,8 +40,8 @@ func New(ctx context.Context, config *Config) (*Instance, error) {
 }
 
 func (g *Instance) initAccessLogger() error {
-	handler, err := createHandler(g.config.Access.Type, HandlerCreatorOptions{
-		Path: g.config.Access.Path,
+	handler, err := createHandler(g.config.AccessLogType, HandlerCreatorOptions{
+		Path: g.config.AccessLogPath,
 	})
 	if err != nil {
 		return err
@@ -59,8 +51,8 @@ func (g *Instance) initAccessLogger() error {
 }
 
 func (g *Instance) initErrorLogger() error {
-	handler, err := createHandler(g.config.Error.Type, HandlerCreatorOptions{
-		Path: g.config.Error.Path,
+	handler, err := createHandler(g.config.ErrorLogType, HandlerCreatorOptions{
+		Path: g.config.ErrorLogPath,
 	})
 	if err != nil {
 		return err
@@ -99,23 +91,6 @@ func (g *Instance) Start() error {
 	return g.startInternal()
 }
 
-// AddFollower implements log.Follower.
-func (g *Instance) AddFollower(f func(msg log.Message)) {
-	g.Lock()
-	defer g.Unlock()
-	if g.followers == nil {
-		g.followers = make(map[reflect.Value]func(msg log.Message))
-	}
-	g.followers[reflect.ValueOf(f)] = f
-}
-
-// RemoveFollower implements log.Follower.
-func (g *Instance) RemoveFollower(f func(msg log.Message)) {
-	g.Lock()
-	defer g.Unlock()
-	delete(g.followers, reflect.ValueOf(f))
-}
-
 // Handle implements log.Handler.
 func (g *Instance) Handle(msg log.Message) {
 	g.RLock()
@@ -125,17 +100,13 @@ func (g *Instance) Handle(msg log.Message) {
 		return
 	}
 
-	for _, f := range g.followers {
-		f(msg)
-	}
-
 	switch msg := msg.(type) {
 	case *log.AccessMessage:
 		if g.accessLogger != nil {
 			g.accessLogger.Handle(msg)
 		}
 	case *log.GeneralMessage:
-		if g.errorLogger != nil && msg.Severity <= g.config.Error.Level {
+		if g.errorLogger != nil && msg.Severity <= g.config.ErrorLogLevel {
 			g.errorLogger.Handle(msg)
 		}
 	default:
@@ -156,10 +127,10 @@ func (g *Instance) Close() error {
 
 	g.active = false
 
-	common.Close(g.accessLogger)
+	common.Close(g.accessLogger) // nolint: errcheck
 	g.accessLogger = nil
 
-	common.Close(g.errorLogger)
+	common.Close(g.errorLogger) // nolint: errcheck
 	g.errorLogger = nil
 
 	return nil

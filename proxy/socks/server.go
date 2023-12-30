@@ -1,3 +1,5 @@
+// +build !confonly
+
 package socks
 
 import (
@@ -5,22 +7,21 @@ import (
 	"io"
 	"time"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/net/packetaddr"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	udp_proto "github.com/v2fly/v2ray-core/v5/common/protocol/udp"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/common/signal"
-	"github.com/v2fly/v2ray-core/v5/common/task"
-	"github.com/v2fly/v2ray-core/v5/features"
-	"github.com/v2fly/v2ray-core/v5/features/policy"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/udp"
+	"v2ray.com/core"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	udp_proto "v2ray.com/core/common/protocol/udp"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/common/signal"
+	"v2ray.com/core/common/task"
+	"v2ray.com/core/features"
+	"v2ray.com/core/features/policy"
+	"v2ray.com/core/features/routing"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/udp"
 )
 
 // Server is a SOCKS 5 proxy server
@@ -90,10 +91,8 @@ func (s *Server) processTCP(ctx context.Context, conn internet.Connection, dispa
 	}
 
 	svrSession := &ServerSession{
-		config:        s.config,
-		address:       inbound.Gateway.Address,
-		port:          inbound.Gateway.Port,
-		clientAddress: inbound.Source.Address,
+		config: s.config,
+		port:   inbound.Gateway.Port,
 	}
 
 	reader := &buf.BufferedReader{Reader: buf.NewReader(conn)}
@@ -176,7 +175,7 @@ func (s *Server) transport(ctx context.Context, reader io.Reader, writer io.Writ
 		return nil
 	}
 
-	requestDonePost := task.OnSuccess(requestDone, task.Close(link.Writer))
+	var requestDonePost = task.OnSuccess(requestDone, task.Close(link.Writer))
 	if err := task.Run(ctx, requestDonePost, responseDone); err != nil {
 		common.Interrupt(link.Reader)
 		common.Interrupt(link.Writer)
@@ -187,26 +186,15 @@ func (s *Server) transport(ctx context.Context, reader io.Reader, writer io.Writ
 }
 
 func (s *Server) handleUDPPayload(ctx context.Context, conn internet.Connection, dispatcher routing.Dispatcher) error {
-	udpDispatcherConstructor := udp.NewSplitDispatcher
-	switch s.config.PacketEncoding {
-	case packetaddr.PacketAddrType_None:
-		break
-	case packetaddr.PacketAddrType_Packet:
-		packetAddrDispatcherFactory := udp.NewPacketAddrDispatcherCreator(ctx)
-		udpDispatcherConstructor = packetAddrDispatcherFactory.NewPacketAddrDispatcher
-	}
-	udpServer := udpDispatcherConstructor(dispatcher, func(ctx context.Context, packet *udp_proto.Packet) {
+	udpServer := udp.NewDispatcher(dispatcher, func(ctx context.Context, packet *udp_proto.Packet) {
 		payload := packet.Payload
 		newError("writing back UDP response with ", payload.Len(), " bytes").AtDebug().WriteToLog(session.ExportIDToError(ctx))
 
 		request := protocol.RequestHeaderFromContext(ctx)
-		var packetSource net.Destination
 		if request == nil {
-			packetSource = packet.Source
-		} else {
-			packetSource = net.UDPDestination(request.Address, request.Port)
+			return
 		}
-		udpMessage, err := EncodeUDPPacketFromAddress(packetSource, payload.Bytes())
+		udpMessage, err := EncodeUDPPacket(request, payload.Bytes())
 		payload.Release()
 
 		defer udpMessage.Release()
@@ -214,7 +202,7 @@ func (s *Server) handleUDPPayload(ctx context.Context, conn internet.Connection,
 			newError("failed to write UDP response").AtWarning().Base(err).WriteToLog(session.ExportIDToError(ctx))
 		}
 
-		conn.Write(udpMessage.Bytes())
+		conn.Write(udpMessage.Bytes()) // nolint: errcheck
 	})
 
 	if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.Source.IsValid() {
@@ -230,6 +218,7 @@ func (s *Server) handleUDPPayload(ctx context.Context, conn internet.Connection,
 
 		for _, payload := range mpayload {
 			request, err := DecodeUDPPacket(payload)
+
 			if err != nil {
 				newError("failed to parse UDP request").Base(err).WriteToLog(session.ExportIDToError(ctx))
 				payload.Release()

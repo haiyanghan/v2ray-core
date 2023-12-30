@@ -1,42 +1,39 @@
+// +build !confonly
+
 package tls
 
 import (
-	"crypto/hmac"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol/tls/cert"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol/tls/cert"
+	"v2ray.com/core/transport/internet"
 )
 
-var globalSessionCache = tls.NewLRUClientSessionCache(128)
+var (
+	globalSessionCache = tls.NewLRUClientSessionCache(128)
+)
 
 const exp8357 = "experiment:8357"
 
 // ParseCertificate converts a cert.Certificate to Certificate.
 func ParseCertificate(c *cert.Certificate) *Certificate {
-	if c != nil {
-		certPEM, keyPEM := c.ToPEM()
-		return &Certificate{
-			Certificate: certPEM,
-			Key:         keyPEM,
-		}
+	certPEM, keyPEM := c.ToPEM()
+	return &Certificate{
+		Certificate: certPEM,
+		Key:         keyPEM,
 	}
-	return nil
 }
 
-func (c *Config) loadSelfCertPool(usage Certificate_Usage) (*x509.CertPool, error) {
+func (c *Config) loadSelfCertPool() (*x509.CertPool, error) {
 	root := x509.NewCertPool()
 	for _, cert := range c.Certificate {
-		if cert.Usage == usage {
-			if !root.AppendCertsFromPEM(cert.Certificate) {
-				return nil, newError("failed to append cert").AtWarning()
-			}
+		if !root.AppendCertsFromPEM(cert.Certificate) {
+			return nil, newError("failed to append cert").AtWarning()
 		}
 	}
 	return root, nil
@@ -67,7 +64,7 @@ func isCertificateExpired(c *tls.Certificate) bool {
 	}
 
 	// If leaf is not there, the certificate is probably not used yet. We trust user to provide a valid certificate.
-	return c.Leaf != nil && c.Leaf.NotAfter.Before(time.Now().Add(time.Minute*2))
+	return c.Leaf != nil && c.Leaf.NotAfter.Before(time.Now().Add(-time.Minute))
 }
 
 func issueCertificate(rawCA *Certificate, domain string) (*tls.Certificate, error) {
@@ -117,12 +114,8 @@ func getGetCertificateFunc(c *tls.Config, ca []*Certificate) func(hello *tls.Cli
 
 			access.Lock()
 			for _, certificate := range c.Certificates {
-				cert := certificate
-				if !isCertificateExpired(&cert) {
-					newCerts = append(newCerts, cert)
-				} else if cert.Leaf != nil {
-					expTime := cert.Leaf.NotAfter.Format(time.RFC3339)
-					newError("old certificate for ", domain, " (expire on ", expTime, ") discard").AtInfo().WriteToLog()
+				if !isCertificateExpired(&certificate) {
+					newCerts = append(newCerts, certificate)
 				}
 			}
 
@@ -139,14 +132,6 @@ func getGetCertificateFunc(c *tls.Config, ca []*Certificate) func(hello *tls.Cli
 				if err != nil {
 					newError("failed to issue new certificate for ", domain).Base(err).WriteToLog()
 					continue
-				}
-				parsed, err := x509.ParseCertificate(newCert.Certificate[0])
-				if err == nil {
-					newCert.Leaf = parsed
-					expTime := parsed.NotAfter.Format(time.RFC3339)
-					newError("new certificate for ", domain, " (expire on ", expTime, ") issued").AtInfo().WriteToLog()
-				} else {
-					newError("failed to parse new certificate for ", domain).Base(err).WriteToLog()
 				}
 
 				access.Lock()
@@ -181,19 +166,6 @@ func (c *Config) parseServerName() string {
 	return c.ServerName
 }
 
-func (c *Config) verifyPeerCert(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	if c.PinnedPeerCertificateChainSha256 != nil {
-		hashValue := GenerateCertChainHash(rawCerts)
-		for _, v := range c.PinnedPeerCertificateChainSha256 {
-			if hmac.Equal(hashValue, v) {
-				return nil
-			}
-		}
-		return newError("peer cert is unrecognized: ", base64.StdEncoding.EncodeToString(hashValue))
-	}
-	return nil
-}
-
 // GetTLSConfig converts this Config into tls.Config.
 func (c *Config) GetTLSConfig(opts ...Option) *tls.Config {
 	root, err := c.getCertPool()
@@ -201,29 +173,15 @@ func (c *Config) GetTLSConfig(opts ...Option) *tls.Config {
 		newError("failed to load system root certificate").AtError().Base(err).WriteToLog()
 	}
 
-	if c == nil {
-		return &tls.Config{
-			ClientSessionCache:     globalSessionCache,
-			RootCAs:                root,
-			InsecureSkipVerify:     false,
-			NextProtos:             nil,
-			SessionTicketsDisabled: true,
-		}
-	}
-
-	clientRoot, err := c.loadSelfCertPool(Certificate_AUTHORITY_VERIFY_CLIENT)
-	if err != nil {
-		newError("failed to load client root certificate").AtError().Base(err).WriteToLog()
-	}
-
 	config := &tls.Config{
 		ClientSessionCache:     globalSessionCache,
 		RootCAs:                root,
 		InsecureSkipVerify:     c.AllowInsecure,
 		NextProtos:             c.NextProtocol,
-		SessionTicketsDisabled: !c.EnableSessionResumption,
-		VerifyPeerCertificate:  c.verifyPeerCert,
-		ClientCAs:              clientRoot,
+		SessionTicketsDisabled: c.DisableSessionResumption,
+	}
+	if c == nil {
+		return config
 	}
 
 	for _, opt := range opts {
@@ -246,9 +204,6 @@ func (c *Config) GetTLSConfig(opts ...Option) *tls.Config {
 		config.NextProtos = []string{"h2", "http/1.1"}
 	}
 
-	if c.VerifyClientCertificate {
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
 	return config
 }
 
@@ -278,11 +233,9 @@ func ConfigFromStreamSettings(settings *internet.MemoryStreamConfig) *Config {
 	if settings == nil {
 		return nil
 	}
-	if settings.SecuritySettings == nil {
+	config, ok := settings.SecuritySettings.(*Config)
+	if !ok {
 		return nil
 	}
-	// Fail close for unknown TLS settings type.
-	// For TLS Clients, Security Engine should be used, instead of this.
-	config := settings.SecuritySettings.(*Config)
 	return config
 }

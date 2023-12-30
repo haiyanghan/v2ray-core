@@ -7,19 +7,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/dispatcher"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/proxy/freedom"
-	"github.com/v2fly/v2ray-core/v5/testing/servers/tcp"
-	"github.com/v2fly/v2ray-core/v5/testing/servers/udp"
+	"v2ray.com/core"
+	"v2ray.com/core/app/dispatcher"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/proxy/freedom"
+	"v2ray.com/core/testing/servers/tcp"
+	"v2ray.com/core/testing/servers/udp"
 )
 
 func xor(b []byte) []byte {
@@ -47,7 +46,7 @@ func TestV2RayDial(t *testing.T) {
 	defer tcpServer.Close()
 
 	config := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&dispatcher.Config{}),
 			serial.ToTypedMessage(&proxyman.InboundConfig{}),
 			serial.ToTypedMessage(&proxyman.OutboundConfig{}),
@@ -62,7 +61,7 @@ func TestV2RayDial(t *testing.T) {
 	cfgBytes, err := proto.Marshal(config)
 	common.Must(err)
 
-	server, err := core.StartInstance(core.FormatProtobuf, cfgBytes)
+	server, err := core.StartInstance("protobuf", cfgBytes)
 	common.Must(err)
 	defer server.Close()
 
@@ -97,7 +96,7 @@ func TestV2RayDialUDPConn(t *testing.T) {
 	defer udpServer.Close()
 
 	config := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&dispatcher.Config{}),
 			serial.ToTypedMessage(&proxyman.InboundConfig{}),
 			serial.ToTypedMessage(&proxyman.OutboundConfig{}),
@@ -112,7 +111,7 @@ func TestV2RayDialUDPConn(t *testing.T) {
 	cfgBytes, err := proto.Marshal(config)
 	common.Must(err)
 
-	server, err := core.StartInstance(core.FormatProtobuf, cfgBytes)
+	server, err := core.StartInstance("protobuf", cfgBytes)
 	common.Must(err)
 	defer server.Close()
 
@@ -164,7 +163,7 @@ func TestV2RayDialUDP(t *testing.T) {
 	defer udpServer2.Close()
 
 	config := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&dispatcher.Config{}),
 			serial.ToTypedMessage(&proxyman.InboundConfig{}),
 			serial.ToTypedMessage(&proxyman.OutboundConfig{}),
@@ -179,7 +178,7 @@ func TestV2RayDialUDP(t *testing.T) {
 	cfgBytes, err := proto.Marshal(config)
 	common.Must(err)
 
-	server, err := core.StartInstance(core.FormatProtobuf, cfgBytes)
+	server, err := core.StartInstance("protobuf", cfgBytes)
 	common.Must(err)
 	defer server.Close()
 

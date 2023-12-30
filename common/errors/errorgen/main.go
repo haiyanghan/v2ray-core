@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+
+	"v2ray.com/core/common"
 )
 
 func main() {
@@ -17,21 +20,26 @@ func main() {
 		pkg = "core"
 	}
 
-	file, err := os.OpenFile("errors.generated.go", os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0o644)
+	moduleName, gmnErr := common.GetModuleName(pwd)
+	if gmnErr != nil {
+		fmt.Println("can not get module path", gmnErr)
+		os.Exit(1)
+	}
+
+	file, err := os.OpenFile("errors.generated.go", os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 	if err != nil {
-		fmt.Printf("Failed to generate errors.generated.go: %v", err)
+		log.Fatalf("Failed to generate errors.generated.go: %v", err)
 		os.Exit(1)
 	}
 	defer file.Close()
 
-	fmt.Fprintf(file, `package %s
-
-import "github.com/v2fly/v2ray-core/v5/common/errors"
-
-type errPathObjHolder struct{}
-
-func newError(values ...interface{}) *errors.Error {
-	return errors.New(values...).WithPathObj(errPathObjHolder{})
-}
-`, pkg)
+	fmt.Fprintln(file, "package", pkg)
+	fmt.Fprintln(file, "")
+	fmt.Fprintln(file, "import \""+moduleName+"/common/errors\"")
+	fmt.Fprintln(file, "")
+	fmt.Fprintln(file, "type errPathObjHolder struct{}")
+	fmt.Fprintln(file, "")
+	fmt.Fprintln(file, "func newError(values ...interface{}) *errors.Error {")
+	fmt.Fprintln(file, "	return errors.New(values...).WithPathObj(errPathObjHolder{})")
+	fmt.Fprintln(file, "}")
 }

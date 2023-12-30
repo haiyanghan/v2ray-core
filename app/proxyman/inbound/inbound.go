@@ -1,22 +1,21 @@
 package inbound
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
 	"sync"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/features/inbound"
+	"v2ray.com/core"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/features/inbound"
 )
 
 // Manager is to manage all inbound handlers.
 type Manager struct {
-	ctx             context.Context
 	access          sync.RWMutex
 	untaggedHandler []inbound.Handler
 	taggedHandlers  map[string]inbound.Handler
@@ -26,7 +25,6 @@ type Manager struct {
 // New returns a new Manager for inbound handlers.
 func New(ctx context.Context, config *proxyman.InboundConfig) (*Manager, error) {
 	m := &Manager{
-		ctx:            ctx,
 		taggedHandlers: make(map[string]inbound.Handler),
 	}
 	return m, nil
@@ -137,11 +135,11 @@ func (m *Manager) Close() error {
 
 // NewHandler creates a new inbound.Handler based on the given config.
 func NewHandler(ctx context.Context, config *core.InboundHandlerConfig) (inbound.Handler, error) {
-	rawReceiverSettings, err := serial.GetInstanceOf(config.ReceiverSettings)
+	rawReceiverSettings, err := config.ReceiverSettings.GetInstance()
 	if err != nil {
 		return nil, err
 	}
-	proxySettings, err := serial.GetInstanceOf(config.ProxySettings)
+	proxySettings, err := config.ProxySettings.GetInstance()
 	if err != nil {
 		return nil, err
 	}

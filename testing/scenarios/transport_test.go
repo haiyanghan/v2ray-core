@@ -7,33 +7,31 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/types/known/anypb"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/app/log"
-	"github.com/v2fly/v2ray-core/v5/app/proxyman"
-	"github.com/v2fly/v2ray-core/v5/common"
-	clog "github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/uuid"
-	"github.com/v2fly/v2ray-core/v5/proxy/dokodemo"
-	"github.com/v2fly/v2ray-core/v5/proxy/freedom"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess/inbound"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess/outbound"
-	"github.com/v2fly/v2ray-core/v5/testing/servers/tcp"
-	"github.com/v2fly/v2ray-core/v5/testing/servers/udp"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/domainsocket"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/headers/http"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/headers/wechat"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/quic"
-	tcptransport "github.com/v2fly/v2ray-core/v5/transport/internet/tcp"
+	"v2ray.com/core"
+	"v2ray.com/core/app/log"
+	"v2ray.com/core/app/proxyman"
+	"v2ray.com/core/common"
+	clog "v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/common/uuid"
+	"v2ray.com/core/proxy/dokodemo"
+	"v2ray.com/core/proxy/freedom"
+	"v2ray.com/core/proxy/vmess"
+	"v2ray.com/core/proxy/vmess/inbound"
+	"v2ray.com/core/proxy/vmess/outbound"
+	"v2ray.com/core/testing/servers/tcp"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/domainsocket"
+	"v2ray.com/core/transport/internet/headers/http"
+	"v2ray.com/core/transport/internet/headers/wechat"
+	"v2ray.com/core/transport/internet/quic"
+	tcptransport "v2ray.com/core/transport/internet/tcp"
 )
 
-func TestHTTPConnectionHeader(t *testing.T) {
+func TestHttpConnectionHeader(t *testing.T) {
 	tcpServer := tcp.Server{
 		MsgProcessor: xor,
 	}
@@ -138,8 +136,8 @@ func TestHTTPConnectionHeader(t *testing.T) {
 }
 
 func TestDomainSocket(t *testing.T) {
-	if runtime.GOOS == "windows" || runtime.GOOS == "android" {
-		t.Skip("Not supported on windows and android")
+	if runtime.GOOS == "windows" {
+		t.Skip("Not supported on windows")
 		return
 	}
 	tcpServer := tcp.Server{
@@ -259,11 +257,12 @@ func TestVMessQuic(t *testing.T) {
 	defer tcpServer.Close()
 
 	userID := protocol.NewID(uuid.New())
-	serverPort := udp.PickPort()
+	serverPort := tcp.PickPort()
 	serverConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&log.Config{
-				Error: &log.LogSpecification{Level: clog.Severity_Debug, Type: log.LogType_Console},
+				ErrorLogLevel: clog.Severity_Debug,
+				ErrorLogType:  log.LogType_Console,
 			}),
 		},
 		Inbound: []*core.InboundHandlerConfig{
@@ -291,7 +290,7 @@ func TestVMessQuic(t *testing.T) {
 						{
 							Account: serial.ToTypedMessage(&vmess.Account{
 								Id:      userID.String(),
-								AlterId: 0,
+								AlterId: 64,
 							}),
 						},
 					},
@@ -307,9 +306,10 @@ func TestVMessQuic(t *testing.T) {
 
 	clientPort := tcp.PickPort()
 	clientConfig := &core.Config{
-		App: []*anypb.Any{
+		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(&log.Config{
-				Error: &log.LogSpecification{Level: clog.Severity_Debug, Type: log.LogType_Console},
+				ErrorLogLevel: clog.Severity_Debug,
+				ErrorLogType:  log.LogType_Console,
 			}),
 		},
 		Inbound: []*core.InboundHandlerConfig{
@@ -354,7 +354,7 @@ func TestVMessQuic(t *testing.T) {
 								{
 									Account: serial.ToTypedMessage(&vmess.Account{
 										Id:      userID.String(),
-										AlterId: 0,
+										AlterId: 64,
 										SecuritySettings: &protocol.SecurityConfig{
 											Type: protocol.SecurityType_AES128_GCM,
 										},

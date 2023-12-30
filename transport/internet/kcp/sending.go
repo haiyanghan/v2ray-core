@@ -1,10 +1,12 @@
+// +build !confonly
+
 package kcp
 
 import (
 	"container/list"
 	"sync"
 
-	"github.com/v2fly/v2ray-core/v5/common/buf"
+	"v2ray.com/core/common/buf"
 )
 
 type SendingWindow struct {
@@ -313,15 +315,13 @@ func (w *SendingWorker) Flush(current uint32) {
 		return
 	}
 
-	cwnd := w.conn.Config.GetSendingInFlightSize()
-	if cwnd > w.remoteNextNumber-w.firstUnacknowledged {
-		cwnd = w.remoteNextNumber - w.firstUnacknowledged
+	cwnd := w.firstUnacknowledged + w.conn.Config.GetSendingInFlightSize()
+	if cwnd > w.remoteNextNumber {
+		cwnd = w.remoteNextNumber
 	}
-	if w.conn.Config.Congestion && cwnd > w.controlWindow {
-		cwnd = w.controlWindow
+	if w.conn.Config.Congestion && cwnd > w.firstUnacknowledged+w.controlWindow {
+		cwnd = w.firstUnacknowledged + w.controlWindow
 	}
-
-	cwnd *= 20 // magic
 
 	if !w.window.IsEmpty() {
 		w.window.Flush(current, w.conn.roundTrip.Timeout(), cwnd)

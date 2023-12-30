@@ -1,12 +1,14 @@
-package retry
+package retry // import "v2ray.com/core/common/retry"
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"time"
 )
 
-var ErrRetryFailed = newError("all retry attempts failed")
+var (
+	ErrRetryFailed = newError("all retry attempts failed")
+)
 
 // Strategy is a way to retry on a specific function.
 type Strategy interface {

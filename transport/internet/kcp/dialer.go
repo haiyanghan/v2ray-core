@@ -1,3 +1,5 @@
+// +build !confonly
+
 package kcp
 
 import (
@@ -5,17 +7,20 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/dice"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/tls"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
+	"v2ray.com/core/common/dice"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/tls"
+	"v2ray.com/core/transport/internet/xtls"
 )
 
-var globalConv = uint32(dice.RollUint16())
+var (
+	globalConv = uint32(dice.RollUint16())
+)
 
-func fetchInput(_ context.Context, input io.Reader, reader PacketReader, conn *Connection) {
+func fetchInput(ctx context.Context, input io.Reader, reader PacketReader, conn *Connection) {
 	cache := make(chan *buf.Buffer, 1024)
 	go func() {
 		for {
@@ -85,6 +90,8 @@ func DialKCP(ctx context.Context, dest net.Destination, streamSettings *internet
 
 	if config := tls.ConfigFromStreamSettings(streamSettings); config != nil {
 		iConn = tls.Client(iConn, config.GetTLSConfig(tls.WithDestination(dest)))
+	} else if config := xtls.ConfigFromStreamSettings(streamSettings); config != nil {
+		iConn = xtls.Client(iConn, config.GetXTLSConfig(xtls.WithDestination(dest)))
 	}
 
 	return iConn, nil

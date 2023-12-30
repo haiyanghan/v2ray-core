@@ -1,24 +1,23 @@
+// +build !confonly
+
 package router
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/platform"
-	"github.com/v2fly/v2ray-core/v5/features/dns"
-	"github.com/v2fly/v2ray-core/v5/features/outbound"
-	"github.com/v2fly/v2ray-core/v5/features/routing"
-	routing_dns "github.com/v2fly/v2ray-core/v5/features/routing/dns"
-	"github.com/v2fly/v2ray-core/v5/infra/conf/cfgcommon"
-	"github.com/v2fly/v2ray-core/v5/infra/conf/geodata"
+	"v2ray.com/core"
+	"v2ray.com/core/common"
+	"v2ray.com/core/features/dns"
+	"v2ray.com/core/features/outbound"
+	"v2ray.com/core/features/routing"
+	routing_dns "v2ray.com/core/features/routing/dns"
 )
 
 // Router is an implementation of routing.Router.
 type Router struct {
-	domainStrategy DomainStrategy
+	domainStrategy Config_DomainStrategy
 	rules          []*Rule
 	balancers      map[string]*Balancer
 	dns            dns.Client
@@ -32,17 +31,16 @@ type Route struct {
 }
 
 // Init initializes the Router.
-func (r *Router) Init(ctx context.Context, config *Config, d dns.Client, ohm outbound.Manager, dispatcher routing.Dispatcher) error {
+func (r *Router) Init(config *Config, d dns.Client, ohm outbound.Manager) error {
 	r.domainStrategy = config.DomainStrategy
 	r.dns = d
 
 	r.balancers = make(map[string]*Balancer, len(config.BalancingRule))
 	for _, rule := range config.BalancingRule {
-		balancer, err := rule.Build(ohm, dispatcher)
+		balancer, err := rule.Build(ohm)
 		if err != nil {
 			return err
 		}
-		balancer.InjectContext(ctx)
 		r.balancers[rule.Tag] = balancer
 	}
 
@@ -84,12 +82,7 @@ func (r *Router) PickRoute(ctx routing.Context) (routing.Route, error) {
 }
 
 func (r *Router) pickRouteInternal(ctx routing.Context) (*Rule, routing.Context, error) {
-	// SkipDNSResolve is set from DNS module.
-	// the DOH remote server maybe a domain name,
-	// this prevents cycle resolving dead loop
-	skipDNSResolve := ctx.GetSkipDNSResolve()
-
-	if r.domainStrategy == DomainStrategy_IpOnDemand && !skipDNSResolve {
+	if r.domainStrategy == Config_IpOnDemand {
 		ctx = routing_dns.ContextWithDNSClient(ctx, r.dns)
 	}
 
@@ -99,7 +92,7 @@ func (r *Router) pickRouteInternal(ctx routing.Context) (*Rule, routing.Context,
 		}
 	}
 
-	if r.domainStrategy != DomainStrategy_IpIfNonMatch || len(ctx.GetTargetDomain()) == 0 || skipDNSResolve {
+	if r.domainStrategy != Config_IpIfNonMatch || len(ctx.GetTargetDomain()) == 0 {
 		return nil, ctx, common.ErrNoClue
 	}
 
@@ -116,16 +109,16 @@ func (r *Router) pickRouteInternal(ctx routing.Context) (*Rule, routing.Context,
 }
 
 // Start implements common.Runnable.
-func (r *Router) Start() error {
+func (*Router) Start() error {
 	return nil
 }
 
 // Close implements common.Closable.
-func (r *Router) Close() error {
+func (*Router) Close() error {
 	return nil
 }
 
-// Type implements common.HasType.
+// Type implement common.HasType.
 func (*Router) Type() interface{} {
 	return routing.RouterType()
 }
@@ -143,122 +136,11 @@ func (r *Route) GetOutboundTag() string {
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
 		r := new(Router)
-		if err := core.RequireFeatures(ctx, func(d dns.Client, ohm outbound.Manager, dispatcher routing.Dispatcher) error {
-			return r.Init(ctx, config.(*Config), d, ohm, dispatcher)
+		if err := core.RequireFeatures(ctx, func(d dns.Client, ohm outbound.Manager) error {
+			return r.Init(config.(*Config), d, ohm)
 		}); err != nil {
 			return nil, err
 		}
 		return r, nil
-	}))
-
-	common.Must(common.RegisterConfig((*SimplifiedConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
-		ctx = cfgcommon.NewConfigureLoadingContext(ctx)
-
-		geoloadername := platform.NewEnvFlag("v2ray.conf.geoloader").GetValue(func() string {
-			return "standard"
-		})
-
-		if loader, err := geodata.GetGeoDataLoader(geoloadername); err == nil {
-			cfgcommon.SetGeoDataLoader(ctx, loader)
-		} else {
-			return nil, newError("unable to create geo data loader ").Base(err)
-		}
-
-		cfgEnv := cfgcommon.GetConfigureLoadingEnvironment(ctx)
-		geoLoader := cfgEnv.GetGeoLoader()
-
-		simplifiedConfig := config.(*SimplifiedConfig)
-
-		var routingRules []*RoutingRule
-
-		for _, v := range simplifiedConfig.Rule {
-			rule := new(RoutingRule)
-
-			for _, geo := range v.Geoip {
-				if geo.Code != "" {
-					filepath := "geoip.dat"
-					if geo.FilePath != "" {
-						filepath = geo.FilePath
-					} else {
-						geo.CountryCode = geo.Code
-					}
-					var err error
-					geo.Cidr, err = geoLoader.LoadIP(filepath, geo.Code)
-					if err != nil {
-						return nil, newError("unable to load geoip").Base(err)
-					}
-				}
-			}
-			rule.Geoip = v.Geoip
-
-			for _, geo := range v.SourceGeoip {
-				if geo.Code != "" {
-					filepath := "geoip.dat"
-					if geo.FilePath != "" {
-						filepath = geo.FilePath
-					} else {
-						geo.CountryCode = geo.Code
-					}
-					var err error
-					geo.Cidr, err = geoLoader.LoadIP(filepath, geo.Code)
-					if err != nil {
-						return nil, newError("unable to load geoip").Base(err)
-					}
-				}
-			}
-			rule.SourceGeoip = v.SourceGeoip
-
-			for _, geo := range v.GeoDomain {
-				if geo.Code != "" {
-					filepath := "geosite.dat"
-					if geo.FilePath != "" {
-						filepath = geo.FilePath
-					}
-					var err error
-					geo.Domain, err = geoLoader.LoadGeoSiteWithAttr(filepath, geo.Code)
-					if err != nil {
-						return nil, newError("unable to load geodomain").Base(err)
-					}
-				}
-			}
-			if v.PortList != "" {
-				portList := &cfgcommon.PortList{}
-				err := portList.UnmarshalText(v.PortList)
-				if err != nil {
-					return nil, err
-				}
-				rule.PortList = portList.Build()
-			}
-			if v.SourcePortList != "" {
-				portList := &cfgcommon.PortList{}
-				err := portList.UnmarshalText(v.SourcePortList)
-				if err != nil {
-					return nil, err
-				}
-				rule.SourcePortList = portList.Build()
-			}
-			rule.Domain = v.Domain
-			rule.GeoDomain = v.GeoDomain
-			rule.Networks = v.Networks.GetNetwork()
-			rule.Protocol = v.Protocol
-			rule.Attributes = v.Attributes
-			rule.UserEmail = v.UserEmail
-			rule.InboundTag = v.InboundTag
-			rule.DomainMatcher = v.DomainMatcher
-			switch s := v.TargetTag.(type) {
-			case *SimplifiedRoutingRule_Tag:
-				rule.TargetTag = &RoutingRule_Tag{s.Tag}
-			case *SimplifiedRoutingRule_BalancingTag:
-				rule.TargetTag = &RoutingRule_BalancingTag{s.BalancingTag}
-			}
-			routingRules = append(routingRules, rule)
-		}
-
-		fullConfig := &Config{
-			DomainStrategy: simplifiedConfig.DomainStrategy,
-			Rule:           routingRules,
-			BalancingRule:  simplifiedConfig.BalancingRule,
-		}
-		return common.CreateObject(ctx, fullConfig)
 	}))
 }

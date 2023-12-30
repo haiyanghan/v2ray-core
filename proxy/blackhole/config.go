@@ -1,9 +1,8 @@
 package blackhole
 
 import (
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/buf"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/buf"
 )
 
 const (
@@ -40,7 +39,7 @@ func (c *Config) GetInternalResponse() (ResponseConfig, error) {
 		return new(NoneResponse), nil
 	}
 
-	config, err := serial.GetInstanceOf(c.GetResponse())
+	config, err := c.GetResponse().GetInstance()
 	if err != nil {
 		return nil, err
 	}

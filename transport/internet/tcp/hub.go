@@ -1,3 +1,5 @@
+// +build !confonly
+
 package tcp
 
 import (
@@ -6,18 +8,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/net"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/session"
-	"github.com/v2fly/v2ray-core/v5/transport/internet"
-	"github.com/v2fly/v2ray-core/v5/transport/internet/tls"
+	"github.com/pires/go-proxyproto"
+	goxtls "github.com/xtls/go"
+
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/net"
+	"v2ray.com/core/common/session"
+	"v2ray.com/core/transport/internet"
+	"v2ray.com/core/transport/internet/tls"
+	"v2ray.com/core/transport/internet/xtls"
 )
 
 // Listener is an internet.Listener that listens for TCP connections.
 type Listener struct {
 	listener   net.Listener
 	tlsConfig  *gotls.Config
+	xtlsConfig *goxtls.Config
 	authConfig internet.ConnectionAuthenticator
 	config     *Config
 	addConn    internet.ConnHandler
@@ -25,51 +31,43 @@ type Listener struct {
 
 // ListenTCP creates a new Listener based on configurations.
 func ListenTCP(ctx context.Context, address net.Address, port net.Port, streamSettings *internet.MemoryStreamConfig, handler internet.ConnHandler) (internet.Listener, error) {
-	l := &Listener{
-		addConn: handler,
+	listener, err := internet.ListenSystem(ctx, &net.TCPAddr{
+		IP:   address.IP(),
+		Port: int(port),
+	}, streamSettings.SocketSettings)
+	if err != nil {
+		return nil, newError("failed to listen TCP on", address, ":", port).Base(err)
 	}
+	newError("listening TCP on ", address, ":", port).WriteToLog(session.ExportIDToError(ctx))
+
 	tcpSettings := streamSettings.ProtocolSettings.(*Config)
-	l.config = tcpSettings
-	if l.config != nil {
-		if streamSettings.SocketSettings == nil {
-			streamSettings.SocketSettings = &internet.SocketConfig{}
-		}
-		streamSettings.SocketSettings.AcceptProxyProtocol = l.config.AcceptProxyProtocol
-	}
-	var listener net.Listener
-	var err error
-	if address.Family().IsDomain() {
-		listener, err = internet.ListenSystem(ctx, &net.UnixAddr{
-			Name: address.Domain(),
-			Net:  "unix",
-		}, streamSettings.SocketSettings)
-		if err != nil {
-			return nil, newError("failed to listen Unix Domain Socket on ", address).Base(err)
-		}
-		newError("listening Unix Domain Socket on ", address).WriteToLog(session.ExportIDToError(ctx))
-	} else {
-		listener, err = internet.ListenSystem(ctx, &net.TCPAddr{
-			IP:   address.IP(),
-			Port: int(port),
-		}, streamSettings.SocketSettings)
-		if err != nil {
-			return nil, newError("failed to listen TCP on ", address, ":", port).Base(err)
-		}
-		newError("listening TCP on ", address, ":", port).WriteToLog(session.ExportIDToError(ctx))
-	}
+	var l *Listener
 
-	if streamSettings.SocketSettings != nil && streamSettings.SocketSettings.AcceptProxyProtocol {
+	if tcpSettings.AcceptProxyProtocol {
+		policyFunc := func(upstream net.Addr) (proxyproto.Policy, error) { return proxyproto.REQUIRE, nil }
+		l = &Listener{
+			listener: &proxyproto.Listener{Listener: listener, Policy: policyFunc},
+			config:   tcpSettings,
+			addConn:  handler,
+		}
 		newError("accepting PROXY protocol").AtWarning().WriteToLog(session.ExportIDToError(ctx))
+	} else {
+		l = &Listener{
+			listener: listener,
+			config:   tcpSettings,
+			addConn:  handler,
+		}
 	}
-
-	l.listener = listener
 
 	if config := tls.ConfigFromStreamSettings(streamSettings); config != nil {
-		l.tlsConfig = config.GetTLSConfig()
+		l.tlsConfig = config.GetTLSConfig(tls.WithNextProto("h2"))
+	}
+	if config := xtls.ConfigFromStreamSettings(streamSettings); config != nil {
+		l.xtlsConfig = config.GetXTLSConfig(xtls.WithNextProto("h2"))
 	}
 
 	if tcpSettings.HeaderSettings != nil {
-		headerConfig, err := serial.GetInstanceOf(tcpSettings.HeaderSettings)
+		headerConfig, err := tcpSettings.HeaderSettings.GetInstance()
 		if err != nil {
 			return nil, newError("invalid header settings").Base(err).AtError()
 		}
@@ -101,6 +99,8 @@ func (v *Listener) keepAccepting() {
 
 		if v.tlsConfig != nil {
 			conn = tls.Server(conn, v.tlsConfig)
+		} else if v.xtlsConfig != nil {
+			conn = xtls.Server(conn, v.xtlsConfig)
 		}
 		if v.authConfig != nil {
 			conn = v.authConfig.Server(conn)

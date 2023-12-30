@@ -1,10 +1,12 @@
+// +build !confonly
+
 package reverse
 
 import (
 	"crypto/rand"
 	"io"
 
-	"github.com/v2fly/v2ray-core/v5/common/dice"
+	"v2ray.com/core/common/dice"
 )
 
 func (c *Control) FillInRandom() {

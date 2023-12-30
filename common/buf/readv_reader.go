@@ -1,4 +1,3 @@
-//go:build !wasm
 // +build !wasm
 
 package buf
@@ -8,7 +7,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/v2fly/v2ray-core/v5/common/platform"
+	"v2ray.com/core/common/platform"
 )
 
 type allocStrategy struct {

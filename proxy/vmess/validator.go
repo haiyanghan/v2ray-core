@@ -1,20 +1,23 @@
+// +build !confonly
+
 package vmess
 
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"hash"
 	"hash/crc64"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/dice"
-	"github.com/v2fly/v2ray-core/v5/common/protocol"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/task"
-	"github.com/v2fly/v2ray-core/v5/proxy/vmess/aead"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/dice"
+	"v2ray.com/core/common/protocol"
+	"v2ray.com/core/common/serial"
+	"v2ray.com/core/common/task"
+	"v2ray.com/core/proxy/vmess/aead"
 )
 
 const (
@@ -40,8 +43,6 @@ type TimedUserValidator struct {
 	behaviorFused bool
 
 	aeadDecoderHolder *aead.AuthIDDecoderHolder
-
-	legacyWarnShown bool
 }
 
 type indexTimePair struct {
@@ -69,11 +70,6 @@ func NewTimedUserValidator(hasher protocol.IDHash) *TimedUserValidator {
 	}
 	common.Must(tuv.task.Start())
 	return tuv
-}
-
-// visible for testing
-func (v *TimedUserValidator) GetBaseTime() protocol.Timestamp {
-	return v.baseTime
 }
 
 func (v *TimedUserValidator) generateNewHashes(nowSec protocol.Timestamp, user *user) {
@@ -118,7 +114,6 @@ func (v *TimedUserValidator) removeExpiredHashes(expire uint32) {
 func (v *TimedUserValidator) updateUserHash() {
 	now := time.Now()
 	nowSec := protocol.Timestamp(now.Unix())
-
 	v.Lock()
 	defer v.Unlock()
 
@@ -147,7 +142,7 @@ func (v *TimedUserValidator) Add(u *protocol.MemoryUser) error {
 
 	account := uu.user.Account.(*MemoryAccount)
 	if !v.behaviorFused {
-		hashkdf := hmac.New(sha256.New, []byte("VMESSBSKDF"))
+		hashkdf := hmac.New(func() hash.Hash { return sha256.New() }, []byte("VMESSBSKDF"))
 		hashkdf.Write(account.ID.Bytes())
 		v.behaviorSeed = crc64.Update(v.behaviorSeed, crc64.MakeTable(crc64.ECMA), hashkdf.Sum(nil))
 	}
@@ -160,8 +155,8 @@ func (v *TimedUserValidator) Add(u *protocol.MemoryUser) error {
 }
 
 func (v *TimedUserValidator) Get(userHash []byte) (*protocol.MemoryUser, protocol.Timestamp, bool, error) {
-	v.RLock()
 	defer v.RUnlock()
+	v.RLock()
 
 	v.behaviorFused = true
 
@@ -179,9 +174,8 @@ func (v *TimedUserValidator) Get(userHash []byte) (*protocol.MemoryUser, protoco
 }
 
 func (v *TimedUserValidator) GetAEAD(userHash []byte) (*protocol.MemoryUser, bool, error) {
-	v.RLock()
 	defer v.RUnlock()
-
+	v.RLock()
 	var userHashFL [16]byte
 	copy(userHashFL[:], userHash)
 
@@ -196,13 +190,12 @@ func (v *TimedUserValidator) Remove(email string) bool {
 	v.Lock()
 	defer v.Unlock()
 
-	email = strings.ToLower(email)
 	idx := -1
-	for i, u := range v.users {
-		if strings.EqualFold(u.user.Email, email) {
+	for i := range v.users {
+		if strings.EqualFold(v.users[i].user.Email, email) {
 			idx = i
 			var cmdkeyfl [16]byte
-			copy(cmdkeyfl[:], u.user.Account.(*MemoryAccount).ID.CmdKey())
+			copy(cmdkeyfl[:], v.users[i].user.Account.(*MemoryAccount).ID.CmdKey())
 			v.aeadDecoderHolder.RemoveUser(cmdkeyfl)
 			break
 		}
@@ -227,7 +220,6 @@ func (v *TimedUserValidator) Close() error {
 func (v *TimedUserValidator) GetBehaviorSeed() uint64 {
 	v.Lock()
 	defer v.Unlock()
-
 	v.behaviorFused = true
 	if v.behaviorSeed == 0 {
 		v.behaviorSeed = dice.RollUint64()
@@ -238,7 +230,6 @@ func (v *TimedUserValidator) GetBehaviorSeed() uint64 {
 func (v *TimedUserValidator) BurnTaintFuse(userHash []byte) error {
 	v.RLock()
 	defer v.RUnlock()
-
 	var userHashFL [16]byte
 	copy(userHashFL[:], userHash)
 
@@ -250,19 +241,6 @@ func (v *TimedUserValidator) BurnTaintFuse(userHash []byte) error {
 		return ErrTainted
 	}
 	return ErrNotFound
-}
-
-/*
-	ShouldShowLegacyWarn will return whether a Legacy Warning should be shown
-
-Not guaranteed to only return true once for every inbound, but it is okay.
-*/
-func (v *TimedUserValidator) ShouldShowLegacyWarn() bool {
-	if v.legacyWarnShown {
-		return false
-	}
-	v.legacyWarnShown = true
-	return true
 }
 
 var ErrNotFound = newError("Not Found")

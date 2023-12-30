@@ -2,13 +2,11 @@ syntax = "proto3";
 
 package v2ray.core.transport.internet.kcp;
 option csharp_namespace = "V2Ray.Core.Transport.Internet.Kcp";
-option go_package = "github.com/v2fly/v2ray-core/v5/transport/internet/kcp";
+option go_package = "v2ray.com/core/transport/internet/kcp";
 option java_package = "com.v2ray.core.transport.internet.kcp";
 option java_multiple_files = true;
 
-import "google/protobuf/any.proto";
-
-import "common/protoext/extensions.proto";
+import "common/serial/typed_message.proto";
 
 // Maximum Transmission Unit, in bytes.
 message MTU {
@@ -50,12 +48,6 @@ message EncryptionSeed {
 }
 
 message Config {
-  option (v2ray.core.common.protoext.message_opt).type = "transport";
-  option (v2ray.core.common.protoext.message_opt).short_name = "kcp";
-  option (v2ray.core.common.protoext.message_opt).allow_restricted_mode_load = true;
-
-  option (v2ray.core.common.protoext.message_opt).transport_original_name = "mkcp";
-
   MTU mtu = 1;
   TTI tti = 2;
   UplinkCapacity uplink_capacity = 3;
@@ -63,7 +55,7 @@ message Config {
   bool congestion = 5;
   WriteBuffer write_buffer = 6;
   ReadBuffer read_buffer = 7;
-  google.protobuf.Any header_config = 8;
+  v2ray.core.common.serial.TypedMessage header_config = 8;
   reserved 9;
   EncryptionSeed seed = 10;
 }

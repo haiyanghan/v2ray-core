@@ -1,15 +1,17 @@
-package uuid
+package uuid // import "v2ray.com/core/common/uuid"
 
 import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/errors"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/errors"
 )
 
-var byteGroups = []int{8, 4, 4, 4, 12}
+var (
+	byteGroups = []int{8, 4, 4, 4, 12}
+)
 
 type UUID [16]byte
 

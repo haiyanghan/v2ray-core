@@ -1,6 +1,8 @@
+// +build !confonly
+
 package commander
 
-//go:generate go run github.com/v2fly/v2ray-core/v5/common/errors/errorgen
+//go:generate go run v2ray.com/core/common/errors/errorgen
 
 import (
 	"context"
@@ -9,12 +11,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/common/signal/done"
-	"github.com/v2fly/v2ray-core/v5/features/outbound"
-	"github.com/v2fly/v2ray-core/v5/infra/conf/v5cfg"
+	"v2ray.com/core"
+	"v2ray.com/core/common"
+	"v2ray.com/core/common/signal/done"
+	"v2ray.com/core/features/outbound"
 )
 
 // Commander is a V2Ray feature that provides gRPC methods to external clients.
@@ -37,7 +37,7 @@ func NewCommander(ctx context.Context, config *Config) (*Commander, error) {
 	}))
 
 	for _, rawConfig := range config.Service {
-		config, err := serial.GetInstanceOf(rawConfig)
+		config, err := rawConfig.GetInstance()
 		if err != nil {
 			return nil, err
 		}
@@ -106,23 +106,5 @@ func (c *Commander) Close() error {
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, cfg interface{}) (interface{}, error) {
 		return NewCommander(ctx, cfg.(*Config))
-	}))
-}
-
-func init() {
-	common.Must(common.RegisterConfig((*SimplifiedConfig)(nil), func(ctx context.Context, cfg interface{}) (interface{}, error) {
-		simplifiedConfig := cfg.(*SimplifiedConfig)
-		fullConfig := &Config{
-			Tag:     simplifiedConfig.Tag,
-			Service: nil,
-		}
-		for _, v := range simplifiedConfig.Name {
-			pack, err := v5cfg.LoadHeterogeneousConfigFromRawJSON(ctx, "grpcservice", v, []byte("{}"))
-			if err != nil {
-				return nil, err
-			}
-			fullConfig.Service = append(fullConfig.Service, serial.ToTypedMessage(pack))
-		}
-		return common.CreateObject(ctx, fullConfig)
 	}))
 }

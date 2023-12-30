@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/v2fly/v2ray-core/v5/common"
+	"v2ray.com/core/common"
 )
 
 type SniffHeader struct {
@@ -20,10 +20,8 @@ func (h *SniffHeader) Domain() string {
 	return h.domain
 }
 
-var (
-	errNotTLS         = errors.New("not TLS header")
-	errNotClientHello = errors.New("not client hello")
-)
+var errNotTLS = errors.New("not TLS header")
+var errNotClientHello = errors.New("not client hello")
 
 func IsValidTLSVersion(major, minor byte) bool {
 	return major == 3

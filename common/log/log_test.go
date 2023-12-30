@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/v2fly/v2ray-core/v5/common/log"
-	"github.com/v2fly/v2ray-core/v5/common/net"
+	"v2ray.com/core/common/log"
+	"v2ray.com/core/common/net"
 )
 
 type testLogger struct {
